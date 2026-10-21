@@ -49,6 +49,7 @@ export const ROLE_PRESETS: Record<Role, Grants> = {
   ADMIN: all(),
   MANAGER: {
     'products.view': 'company',
+    'products.manage': 'company',
     'sales.view': 'location',
     'sales.create': 'location',
     'sales.void': 'location',
