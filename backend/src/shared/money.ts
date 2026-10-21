@@ -7,6 +7,14 @@ export type Numeric = Decimal | string | number;
 export const D = (v: Numeric): Decimal => new Decimal(v);
 export const ZERO = new Decimal(0);
 
+export const tryD = (v: Numeric): Decimal | null => {
+  try {
+    return new Decimal(v);
+  } catch {
+    return null;
+  }
+};
+
 /** Round a line amount to cents (invoice lines, payments). */
 export const roundMoney = (v: Numeric): Decimal => D(v).toDecimalPlaces(2);
 /** Round to the 4 decimals used in storage. */

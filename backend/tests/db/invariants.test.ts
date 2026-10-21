@@ -239,3 +239,86 @@ describe('payments', () => {
        VALUES ($1, 'P2', 'SUPPLIER', $2, $3, 'CASH', 10, now(), $4)`, [A.companyId, cust.id, fa.id, uid()])).rejects.toThrow();
   });
 });
+
+describe('products and units', () => {
+  const product = async (co: Co, sku: string, extra = '') =>
+    (await one<{ id: string }>(
+      `INSERT INTO products ("companyId", sku, name, "baseUnit", "updatedAt" ${extra ? ', "allowFractions"' : ''})
+       VALUES ($1, $2, $2, 'kg', now() ${extra ? ', ' + extra : ''}) RETURNING id`, [co.companyId, sku])).id;
+  const unit = (co: Co, productId: string, name: string, factor: number | string, more = '') =>
+    one<{ id: string }>(
+      `INSERT INTO product_units ("companyId", "productId", name, "factorToBase" ${more ? ', ' + more.split('=')[0] : ''})
+       VALUES ($1, $2, $3, $4 ${more ? ', ' + more.split('=')[1] : ''}) RETURNING id`, [co.companyId, productId, name, factor]);
+
+  it('the base unit must convert at exactly 1', async () => {
+    const p = await product(A, 'U1');
+    await expect(unit(A, p, 'kg', 2, '"isBase"=true')).rejects.toThrow(/product_units_base_factor|check/);
+    await unit(A, p, 'kg', 1, '"isBase"=true');
+  });
+
+  it('a product has one base unit only', async () => {
+    const p = await product(A, 'U2');
+    await unit(A, p, 'kg', 1, '"isBase"=true');
+    await expect(unit(A, p, 'litre', 1, '"isBase"=true')).rejects.toThrow(/only one base unit/);
+  });
+
+  it('unit names are unique per product ignoring upper/lower case, but another product may reuse the name', async () => {
+    const p = await product(A, 'U3');
+    const q = await product(A, 'U4');
+    await unit(A, p, 'Sack', 50);
+    await expect(unit(A, p, 'SACK', 25)).rejects.toThrow(/already has a unit/);
+    await unit(A, q, 'Sack', 50);
+  });
+
+  it('conversions must be positive and not absurd', async () => {
+    const p = await product(A, 'U5');
+    await expect(unit(A, p, 'zero', 0)).rejects.toThrow();
+    await expect(unit(A, p, 'huge', 2000000)).rejects.toThrow();
+  });
+
+  it('a barcode exists once per company, and units without one never clash', async () => {
+    const p = await product(A, 'U6');
+    await unit(A, p, 'Carton', 12, `barcode='6001234567890'`);
+    await expect(unit(A, p, 'Bottle', 1, `barcode='6001234567890'`)).rejects.toThrow(/unique|duplicate/i);
+    await unit(A, p, 'Tin', 1);
+    await unit(A, p, 'Pack', 6);
+    const q = await product(B, 'U6');
+    await unit(B, q, 'Carton', 12, `barcode='6001234567890'`); // another company, so no clash
+  });
+
+  it('once a unit is on a purchase line its conversion is frozen (name and barcode stay editable)', async () => {
+    const p = await product(A, 'U7');
+    const used = await unit(A, p, 'Sack 50', 50);
+    const spare = await unit(A, p, 'Sack 25', 25);
+    const sup = await one<{ id: string }>(`INSERT INTO suppliers ("companyId", code, name) VALUES ($1, $2, 'Sup') RETURNING id`, [A.companyId, `S${next()}`]);
+    const rec = await one<{ id: string }>(
+      `INSERT INTO purchase_receipts ("companyId", number, "supplierId", "locationId", "receivedAt", "goodsTotal", total, "createdById")
+       VALUES ($1, $2, $3, $4, now(), 100, 100, $5) RETURNING id`, [A.companyId, `R${next()}`, sup.id, A.locationId, uid()]);
+    await db.query(
+      `INSERT INTO purchase_receipt_lines ("companyId", "receiptId", "productId", "productUnitId", "qtyExpected", "qtyReceived", "qtyReceivedBase", "unitCost", "landedUnitCostBase", "lineTotal")
+       VALUES ($1, $2, $3, $4, 2, 2, 100, 50, 1, 100)`, [A.companyId, rec.id, p, used.id]);
+
+    await expect(db.query(`UPDATE product_units SET "factorToBase" = 40 WHERE id = $1`, [used.id])).rejects.toThrow(/already used on documents/);
+    await db.query(`UPDATE product_units SET name = 'Sack of 50 kg', barcode = 'SACK50BARCODE' WHERE id = $1`, [used.id]);
+    await db.query(`UPDATE product_units SET "factorToBase" = 30 WHERE id = $1`, [spare.id]); // never used: still correctable
+  });
+
+  it('once a product has stock movements its base unit and whole-number rule are frozen', async () => {
+    const p = await product(A, 'U8');
+    await db.query(`UPDATE products SET "baseUnit" = 'litre', "allowFractions" = true WHERE id = $1`, [p]); // no history yet: fine
+    await db.query(
+      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
+       VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`, [A.companyId, A.locationId, p, uid()]);
+    await expect(db.query(`UPDATE products SET "baseUnit" = 'kg' WHERE id = $1`, [p])).rejects.toThrow(/stock history/);
+    await expect(db.query(`UPDATE products SET "allowFractions" = false WHERE id = $1`, [p])).rejects.toThrow(/stock history/);
+    await db.query(`UPDATE products SET name = 'Renamed', status = 'INACTIVE' WHERE id = $1`, [p]); // other fields stay editable
+  });
+
+  it('allowing fractions later is harmless and stays possible', async () => {
+    const p = await product(A, 'U9');
+    await db.query(
+      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
+       VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`, [A.companyId, A.locationId, p, uid()]);
+    await db.query(`UPDATE products SET "allowFractions" = true WHERE id = $1`, [p]);
+  });
+});

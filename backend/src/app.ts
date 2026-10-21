@@ -10,6 +10,7 @@ import { usersRouter } from './modules/users/users.routes.js';
 import { accountingRouter } from './modules/accounting/accounting.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
 import { companyRouter } from './modules/company/company.routes.js';
+import { categoriesRouter, priceListsRouter, productsRouter } from './modules/products/products.routes.js';
 
 export function createApp(opts: { corsOrigin?: string } = {}) {
   const app = express();
@@ -31,6 +32,10 @@ export function createApp(opts: { corsOrigin?: string } = {}) {
   app.use('/api/company', companyRouter);
   app.use('/api/accounting', accountingRouter);
   app.use('/api/audit-logs', auditRouter);
+  
+  app.use('/api/products', productsRouter);
+  app.use('/api/categories', categoriesRouter);
+  app.use('/api/price-lists', priceListsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

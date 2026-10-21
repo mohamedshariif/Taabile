@@ -153,3 +153,62 @@ CREATE POLICY own_memberships ON memberships FOR SELECT
 DROP POLICY IF EXISTS invitation_by_token ON invitations;
 CREATE POLICY invitation_by_token ON invitations
   USING ("tokenHash" = nullif(current_setting('app.invite_token_hash', true), ''));
+
+-- ───────── 7. Products and units ─────────
+-- The base unit always converts at exactly 1, and no conversion is absurdly large.
+ALTER TABLE product_units DROP CONSTRAINT IF EXISTS product_units_base_factor;
+ALTER TABLE product_units ADD CONSTRAINT product_units_base_factor CHECK (NOT "isBase" OR "factorToBase" = 1);
+ALTER TABLE product_units DROP CONSTRAINT IF EXISTS product_units_factor_max;
+ALTER TABLE product_units ADD CONSTRAINT product_units_factor_max CHECK ("factorToBase" <= 1000000);
+
+-- Unit rules the database enforces even if application code has a bug:
+--   * unit names are unique per product ignoring upper/lower case ("Sack" and "sack" clash)
+--   * a product has at most one base unit, and a unit can never become (or stop being) the base unit
+--   * once a purchase or sale line uses a unit, its conversion can never change: history keeps its meaning
+-- (These are triggers rather than partial indexes because Prisma would drop partial indexes on the next migration.
+--  The API takes a row lock on the product before changing units, so two requests cannot slip past these checks together.)
+CREATE OR REPLACE FUNCTION guard_product_unit() RETURNS trigger AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM product_units u
+             WHERE u."productId" = NEW."productId" AND u.id <> NEW.id AND lower(u.name) = lower(NEW.name)) THEN
+    RAISE EXCEPTION 'This product already has a unit called %', NEW.name USING ERRCODE = '23505';
+  END IF;
+  IF NEW."isBase" AND EXISTS (SELECT 1 FROM product_units u
+                              WHERE u."productId" = NEW."productId" AND u.id <> NEW.id AND u."isBase") THEN
+    RAISE EXCEPTION 'A product can have only one base unit' USING ERRCODE = '23505';
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW."isBase" <> OLD."isBase" OR NEW."productId" <> OLD."productId" THEN
+      RAISE EXCEPTION 'A unit cannot move to another product or become the base unit' USING ERRCODE = '23514';
+    END IF;
+    IF NEW."factorToBase" <> OLD."factorToBase" AND (
+         EXISTS (SELECT 1 FROM purchase_receipt_lines l WHERE l."productUnitId" = OLD.id)
+      OR EXISTS (SELECT 1 FROM sale_lines l WHERE l."productUnitId" = OLD.id)) THEN
+      RAISE EXCEPTION 'Unit % is already used on documents, so its conversion cannot change', OLD.name USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS product_units_guard ON product_units;
+CREATE TRIGGER product_units_guard BEFORE INSERT OR UPDATE ON product_units
+  FOR EACH ROW EXECUTE FUNCTION guard_product_unit();
+
+-- Once a product has stock history, its base unit and its "whole numbers only" rule are frozen.
+-- (Allowing fractions later is harmless and stays possible.)
+CREATE OR REPLACE FUNCTION guard_product() RETURNS trigger AS $$
+BEGIN
+  IF NEW."baseUnit" <> OLD."baseUnit" OR (OLD."allowFractions" AND NOT NEW."allowFractions") THEN
+    IF EXISTS (SELECT 1 FROM stock_movements m WHERE m."productId" = OLD.id)
+       OR EXISTS (SELECT 1 FROM purchase_receipt_lines l WHERE l."productId" = OLD.id)
+       OR EXISTS (SELECT 1 FROM sale_lines l WHERE l."productId" = OLD.id) THEN
+      RAISE EXCEPTION 'This product already has stock history, so its base unit and whole-number rule cannot change'
+        USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS products_guard ON products;
+CREATE TRIGGER products_guard BEFORE UPDATE ON products
+  FOR EACH ROW EXECUTE FUNCTION guard_product();
