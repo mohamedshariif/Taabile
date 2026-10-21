@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Build output and generated files
+dist/
+build/
+coverage/
+.next/
+*.tsbuildinfo
+
+# Local databases and database dumps
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+
+# Logs and operating-system files
+*.log
+.DS_Store
