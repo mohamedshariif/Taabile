@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, errorMessage } from '../api/client';
 import type { Invitation, InvitationResult, Location, Member, Role } from '../api/types';
 import { useMe } from '../auth/AuthContext';
+import { Badge, Button, Card, Check, DataTable, ErrorText, Field, FieldRow, Group, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../components/ui';
 
 const ROLE_LABEL: Record<Role, string> = { ADMIN: 'Admin', MANAGER: 'Manager', STAFF: 'Staff', VIEWER: 'Viewer' };
 const needsLocations = (r: Role) => r === 'MANAGER' || r === 'STAFF';
@@ -58,7 +59,7 @@ export function UsersPage() {
     onSuccess: () => void refreshInvites(),
   });
 
-  const submit = (e: FormEvent) => {
+    const submit = (e: FormEvent) => {
     e.preventDefault();
     setLink(null);
     setNotice(null);
@@ -66,102 +67,92 @@ export function UsersPage() {
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
+  const memberColumns: Column<Member>[] = [
+    {
+      header: 'Name',
+      primary: true,
+      cell: (m) => (
+        <>
+          {m.name}
+          <div className="text-sm font-normal text-muted">{m.email}</div>
+        </>
+      ),
+    },
+    { header: 'Role', cell: (m) => ROLE_LABEL[m.role] },
+    {
+      header: 'Locations',
+      cell: (m) =>
+        needsLocations(m.role) ? (m.locationIds.length ? m.locationIds.map(nameOf).join(', ') : <span className="text-danger">none</span>) : 'All',
+    },
+    { header: 'Status', cell: (m) => <Badge tone={m.status === 'ACTIVE' ? 'ok' : 'off'}>{m.status === 'ACTIVE' ? 'Active' : 'Deactivated'}</Badge> },
+    { header: 'Last sign-in', cell: (m) => (m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : 'Never') },
+    { header: '', actions: true, cell: (m) => <Link to={`/users/${m.userId}`}>{m.userId === me.user.id ? 'View' : 'Manage'}</Link> },
+  ];
+
+  const inviteColumns: Column<Invitation>[] = [
+    { header: 'Email', primary: true, cell: (i) => i.email },
+    { header: 'Role', cell: (i) => ROLE_LABEL[i.role] },
+    { header: 'Status', cell: (i) => <Badge tone={i.status === 'PENDING' ? 'wait' : i.status === 'ACCEPTED' ? 'ok' : 'off'}>{i.status.toLowerCase()}</Badge> },
+    { header: 'Expires', cell: (i) => new Date(i.expiresAt).toLocaleString() },
+    {
+      header: '',
+      actions: true,
+      cell: (i) => (
+        <>
+          {(i.status === 'PENDING' || i.status === 'EXPIRED') && (
+            <Button small variant="ghost" disabled={resend.isPending} onClick={() => resend.mutate(i.id)}>Send again</Button>
+          )}
+          {i.status === 'PENDING' && (
+            <Button small variant="ghost" disabled={revoke.isPending} onClick={() => revoke.mutate(i.id)}>Cancel</Button>
+          )}
+        </>
+      ),
+    },
+  ];
+
   return (
     <>
-      <h1>Users</h1>
+      <PageTitle>Users</PageTitle>
 
-      <h2>People in {me.company.name}</h2>
-      {members.isLoading && <p className="muted">Loading…</p>}
-      {members.isError && <p className="error">{errorMessage(members.error)}</p>}
-      {members.data && (
-        <table className="table">
-          <thead>
-            <tr><th>Name</th><th>Role</th><th>Locations</th><th>Status</th><th>Last sign-in</th><th></th></tr>
-          </thead>
-          <tbody>
-            {members.data.members.map((m) => (
-              <tr key={m.userId} className={m.status === 'ACTIVE' ? '' : 'dim'}>
-                <td>
-                  {m.name}
-                  <div className="muted small">{m.email}</div>
-                </td>
-                <td>{ROLE_LABEL[m.role]}</td>
-                <td className="small">
-                  {needsLocations(m.role) ? (m.locationIds.length ? m.locationIds.map(nameOf).join(', ') : <span className="error">none</span>) : 'All'}
-                </td>
-                <td><span className={`badge ${m.status === 'ACTIVE' ? 'ok' : 'off'}`}>{m.status === 'ACTIVE' ? 'Active' : 'Deactivated'}</span></td>
-                <td className="small">{m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : 'Never'}</td>
-                <td><Link to={`/users/${m.userId}`}>{m.userId === me.user.id ? 'View' : 'Manage'}</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <SectionTitle>People in {me.company.name}</SectionTitle>
+      {members.isLoading && <Muted>Loading…</Muted>}
+      {members.isError && <ErrorText>{errorMessage(members.error)}</ErrorText>}
+      {members.data && <DataTable rows={members.data.members} columns={memberColumns} rowKey={(m) => m.userId} dim={(m) => m.status !== 'ACTIVE'} />}
 
-      <form className="card" onSubmit={submit}>
-        <h2>Invite someone</h2>
-        <div className="row">
-          <label>
-            Email
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
-          </label>
-          <label>
-            Role
-            <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+      <Card as="form" onSubmit={submit}>
+        <SectionTitle first>Invite someone</SectionTitle>
+        <FieldRow>
+          <Field label="Email">
+            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
+          </Field>
+          <Field label="Role">
+            <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
-          </label>
-        </div>
+            </Select>
+          </Field>
+        </FieldRow>
         {needsLocations(role) && (
-          <fieldset>
-            <legend>Where will they work?</legend>
-            {activeLocations.length === 0 && <p className="muted small">Add a location first (Locations menu).</p>}
+          <Group legend="Where will they work?">
+            {activeLocations.length === 0 && <Muted small>Add a location first (Locations menu).</Muted>}
             {activeLocations.map((l) => (
-              <label key={l.id} className="check">
-                <input type="checkbox" checked={picked.includes(l.id)} onChange={() => toggle(l.id)} /> {l.name}
-              </label>
+              <Check key={l.id} label={l.name} checked={picked.includes(l.id)} onChange={() => toggle(l.id)} />
             ))}
             {picked.length === 0 && activeLocations.length > 0 && (
-              <p className="small error">A {ROLE_LABEL[role]} with no location cannot work anywhere yet. Choose at least one.</p>
+              <p className="my-1 text-sm text-danger">A {ROLE_LABEL[role]} with no location cannot work anywhere yet. Choose at least one.</p>
             )}
-          </fieldset>
+          </Group>
         )}
-        <button disabled={invite.isPending}>{invite.isPending ? 'Sending…' : 'Send invitation'}</button>
-        <p className="muted small">The link works once and expires after 72 hours. They choose their own password; you never see it.</p>
-        {invite.isError && <p className="error" role="alert">{errorMessage(invite.error)}</p>}
-      </form>
+        <Button type="submit" disabled={invite.isPending}>{invite.isPending ? 'Sending…' : 'Send invitation'}</Button>
+        <Muted small className="mt-2">The link works once and expires after 72 hours. They choose their own password; you never see it.</Muted>
+        {invite.isError && <ErrorText>{errorMessage(invite.error)}</ErrorText>}
+      </Card>
 
       {link && <DevLink email={link.email} url={link.url} />}
-      {notice && <p className="card" role="status">{notice}</p>}
+      {notice && <Card role="status">{notice}</Card>}
 
-      <h2>Invitations</h2>
-      {invites.data && (
-        <table className="table">
-          <thead>
-            <tr><th>Email</th><th>Role</th><th>Status</th><th>Expires</th><th></th></tr>
-          </thead>
-          <tbody>
-            {invites.data.invitations.map((i) => (
-              <tr key={i.id}>
-                <td>{i.email}</td>
-                <td>{ROLE_LABEL[i.role]}</td>
-                <td><span className={`badge ${i.status === 'PENDING' ? 'wait' : i.status === 'ACCEPTED' ? 'ok' : 'off'}`}>{i.status.toLowerCase()}</span></td>
-                <td className="small">{new Date(i.expiresAt).toLocaleString()}</td>
-                <td className="actions">
-                  {(i.status === 'PENDING' || i.status === 'EXPIRED') && (
-                    <button className="small ghost" disabled={resend.isPending} onClick={() => resend.mutate(i.id)}>Send again</button>
-                  )}
-                  {i.status === 'PENDING' && (
-                    <button className="small ghost" disabled={revoke.isPending} onClick={() => revoke.mutate(i.id)}>Cancel</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {invites.data.invitations.length === 0 && <tr><td colSpan={5} className="muted">No invitations yet.</td></tr>}
-          </tbody>
-        </table>
-      )}
-      {(resend.isError || revoke.isError) && <p className="error" role="alert">{errorMessage(resend.error ?? revoke.error)}</p>}
+      <SectionTitle>Invitations</SectionTitle>
+      {invites.data && <DataTable rows={invites.data.invitations} columns={inviteColumns} rowKey={(i) => i.id} empty="No invitations yet." />}
+      {(resend.isError || revoke.isError) && <ErrorText>{errorMessage(resend.error ?? revoke.error)}</ErrorText>}
     </>
   );
 }
@@ -169,18 +160,18 @@ export function UsersPage() {
 function DevLink({ email, url }: { email: string; url: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="card devlink" role="status">
+    <Card role="status" className="border-warn">
       <strong>Development mode:</strong> no real email is sent yet. Give this one-time link to {email}:
-      <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
-      <button
-        type="button"
-        className="small"
+      <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
+      <Button
+        small
+        className="mt-2"
         onClick={() => {
           void navigator.clipboard?.writeText(url).then(() => setCopied(true));
         }}
       >
         {copied ? 'Copied' : 'Copy link'}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
