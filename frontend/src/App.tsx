@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { RequireAuth, RequirePermission } from './components/RequireAuth';
+import { Center, Muted } from './components/ui';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { HomePage } from './pages/HomePage';
 import { LocationsPage } from './pages/LocationsPage';
@@ -27,7 +28,12 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="*" element={<p className="center">Page not found.</p>} />
+      <Route 
+        path="*"
+        element={<Center>
+          <Muted>Page not found.</Muted>
+        </Center>}
+      />
     </Routes>
   );
 }
