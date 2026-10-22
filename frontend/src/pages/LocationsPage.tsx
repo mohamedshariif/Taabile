@@ -3,7 +3,11 @@ import { useState, type FormEvent } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { Location, LocationType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { Badge, Button, Card, DataTable, ErrorText, Field, FieldRow, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../components/ui';
 
+// Everybody in the company may SEE the locations (other screens need them).
+// Only people with company.manage see the add / rename / switch-off controls.
+// The server enforces this too; hiding the controls is just a tidier screen.
 export function LocationsPage() {
   const { can } = useAuth();
   const canManage = can('company.manage');
@@ -15,6 +19,9 @@ export function LocationsPage() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [type, setType] = useState<LocationType>('STORE');
+  // Which row is being renamed, and the text typed so far.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
 
   const create = useMutation({
     mutationFn: () => api('/locations', { method: 'POST', body: { name, code, type } }),
@@ -35,116 +42,84 @@ export function LocationsPage() {
     create.mutate();
   };
 
+  const columns: Column<Location>[] = [
+    {
+      header: 'Name',
+      primary: true,
+      cell: (l) =>
+        editingId === l.id ? (
+          <Input className="mt-0!" aria-label="New name" value={draft} minLength={2} maxLength={80} onChange={(e) => setDraft(e.target.value)} />
+        ) : (
+          l.name
+        ),
+    },
+    { header: 'Code', cell: (l) => <code>{l.code}</code> },
+    { header: 'Type', cell: (l) => (l.type === 'STORE' ? 'Store' : 'Warehouse') },
+    { header: 'Status', cell: (l) => <Badge tone={l.status === 'ACTIVE' ? 'ok' : 'off'}>{l.status === 'ACTIVE' ? 'Active' : 'Inactive'}</Badge> },
+  ];
+  if (canManage) {
+    columns.push({
+      header: '',
+      actions: true,
+      cell: (l) =>
+        editingId === l.id ? (
+          <>
+            <Button
+              small
+              disabled={update.isPending || draft.trim().length < 2}
+              onClick={() => {
+                update.mutate({ id: l.id, name: draft.trim() });
+                setEditingId(null);
+              }}
+            >
+              Save
+            </Button>
+            <Button small variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+          </>
+        ) : (
+          <>
+            <Button small variant="ghost" onClick={() => { setEditingId(l.id); setDraft(l.name); }}>Rename</Button>
+            <Button small variant="ghost" disabled={update.isPending} onClick={() => update.mutate({ id: l.id, status: l.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })}>
+              {l.status === 'ACTIVE' ? 'Switch off' : 'Switch on'}
+            </Button>
+          </>
+        ),
+    });
+  }
+
   return (
     <>
-      <h1>Locations</h1>
-      <p className="muted">Your stores and warehouses. The code is printed on documents and cannot be changed later.</p>
+      <PageTitle>Locations</PageTitle>
+      <Muted>Your stores and warehouses. The code is printed on documents and cannot be changed later.</Muted>
 
-      {list.isLoading && <p className="muted">Loading…</p>}
-      {list.isError && <p className="error">{errorMessage(list.error)}</p>}
-
+      {list.isLoading && <Muted className="mt-3">Loading…</Muted>}
+      {list.isError && <ErrorText>{errorMessage(list.error)}</ErrorText>}
       {list.data && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Code</th>
-              <th>Type</th>
-              <th>Status</th>
-              {canManage && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {list.data.locations.map((l) => (
-              <LocationRow key={l.id} loc={l} canManage={canManage} busy={update.isPending} onChange={(v) => update.mutate({ id: l.id, ...v })} />
-            ))}
-            {list.data.locations.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted">No locations yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <DataTable rows={list.data.locations} columns={columns} rowKey={(l) => l.id} dim={(l) => l.status !== 'ACTIVE'} empty="No locations yet." />
       )}
-      {update.isError && <p className="error" role="alert">{errorMessage(update.error)}</p>}
+      {update.isError && <ErrorText>{errorMessage(update.error)}</ErrorText>}
 
       {canManage && (
-        <form className="card" onSubmit={submit}>
-          <h2>Add a location</h2>
-          <div className="row">
-            <label>
-              Name
-              <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Main store" />
-            </label>
-            <label>
-              Code
-              <input required maxLength={12} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="A" />
-            </label>
-            <label>
-              Type
-              <select value={type} onChange={(e) => setType(e.target.value as LocationType)}>
+        <Card as="form" onSubmit={submit}>
+          <SectionTitle first>Add a location</SectionTitle>
+          <FieldRow>
+            <Field label="Name">
+              <Input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="Main store" />
+            </Field>
+            <Field label="Code">
+              <Input required maxLength={12} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="A" />
+            </Field>
+            <Field label="Type">
+              <Select value={type} onChange={(e) => setType(e.target.value as LocationType)}>
                 <option value="STORE">Store</option>
                 <option value="WAREHOUSE">Warehouse</option>
-              </select>
-            </label>
-          </div>
-          <button disabled={create.isPending}>{create.isPending ? 'Adding…' : 'Add location'}</button>
-          {create.isError && <p className="error" role="alert">{errorMessage(create.error)}</p>}
-        </form>
+              </Select>
+            </Field>
+          </FieldRow>
+          <Button type="submit" disabled={create.isPending}>{create.isPending ? 'Adding…' : 'Add location'}</Button>
+          {create.isError && <ErrorText>{errorMessage(create.error)}</ErrorText>}
+        </Card>
       )}
     </>
-  );
-}
-
-function LocationRow(props: {
-  loc: Location;
-  canManage: boolean;
-  busy: boolean;
-  onChange: (v: { name?: string; status?: 'ACTIVE' | 'INACTIVE' }) => void;
-}) {
-  const { loc, canManage, busy, onChange } = props;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(loc.name);
-  const active = loc.status === 'ACTIVE';
-
-  return (
-    <tr className={active ? '' : 'dim'}>
-      <td>
-        {editing ? (
-          <input value={draft} minLength={2} maxLength={80} onChange={(e) => setDraft(e.target.value)} />
-        ) : (
-          loc.name
-        )}
-      </td>
-      <td><code>{loc.code}</code></td>
-      <td>{loc.type === 'STORE' ? 'Store' : 'Warehouse'}</td>
-      <td><span className={`badge ${active ? 'ok' : 'off'}`}>{active ? 'Active' : 'Inactive'}</span></td>
-      {canManage && (
-        <td className="actions">
-          {editing ? (
-            <>
-              <button
-                className="small"
-                disabled={busy || draft.trim().length < 2}
-                onClick={() => {
-                  onChange({ name: draft.trim() });
-                  setEditing(false);
-                }}
-              >
-                Save
-              </button>
-              <button className="small ghost" onClick={() => { setEditing(false); setDraft(loc.name); }}>Cancel</button>
-            </>
-          ) : (
-            <>
-              <button className="small ghost" onClick={() => setEditing(true)}>Rename</button>
-              <button className="small ghost" disabled={busy} onClick={() => onChange({ status: active ? 'INACTIVE' : 'ACTIVE' })}>
-                {active ? 'Switch off' : 'Switch on'}
-              </button>
-            </>
-          )}
-        </td>
-      )}
-    </tr>
   );
 }

@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import type { CompanyChoice } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../components/ui';
 
 export function LoginPage() {
   const { state, login } = useAuth();
@@ -32,33 +33,31 @@ export function LoginPage() {
   }
 
   return (
-    <div className="center">
-      <form className="card narrow" onSubmit={(e) => void submit(e)}>
-        <h1>Sign in to Taabile</h1>
+    <Center>
+      <Card as="form" className="w-full max-w-sm" onSubmit={(e) => void submit(e)}>
+        <h1 className="mb-3 text-2xl font-bold">Sign in to Taabile</h1>
         {choices ? (
-          <>
+          <div className="space-y-2">
             <p>You belong to more than one company. Which one do you want to open?</p>
             {choices.map((c) => (
-              <button key={c.id} type="button" className="choice" disabled={busy} onClick={(e) => void submit(e, c.id)}>
-                {c.name} <span className="muted small">{c.role}</span>
-              </button>
+              <Button key={c.id} variant="choice" disabled={busy} onClick={(e) => void submit(e, c.id)}>
+                {c.name} <Muted small className="ml-2">{c.role}</Muted>
+              </Button>
             ))}
-          </>
+          </div>
         ) : (
-          <>
-            <label>
-              Email
-              <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </label>
-            <label>
-              Password
-              <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </label>
-            <button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          </>
+          <div className="space-y-4">
+            <Field label="Email">
+              <Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Password">
+              <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </Field>
+            <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Button>
+          </div>
         )}
-        {error && <p className="error" role="alert">{error}</p>}
-      </form>
-    </div>
+        {error && <ErrorText>{error}</ErrorText>}
+      </Card>
+    </Center>
   );
 }

@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import type { InvitationPreview } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../components/ui';
 
 // Opened from the link in the invitation email:  /accept-invite?token=...
 export function AcceptInvitePage() {
@@ -40,16 +41,12 @@ export function AcceptInvitePage() {
     }
   }
 
-  if (!token) return 
-  <Box>
-    <p className="error">This link is incomplete. Ask your Admin to send a new invitation.
-      </p>
-  </Box>;
-  if (preview.isLoading) return <Box><p className="muted">Checking your invitation…</p></Box>;
+    if (!token) return <Box><ErrorText>This link is incomplete. Ask your Admin to send a new invitation.</ErrorText></Box>;
+  if (preview.isLoading) return <Box><Muted>Checking your invitation…</Muted></Box>;
   if (preview.isError) {
     return (
       <Box>
-        <h1>Invitation not valid</h1>
+        <Title>Invitation not valid</Title>
         <p>This link was already used, has expired, or was cancelled. Ask your Admin to send a new one.</p>
       </Box>
     );
@@ -58,42 +55,41 @@ export function AcceptInvitePage() {
 
   return (
     <Box>
-      <h1>Join {inv.companyName}</h1>
+      <Title>Join {inv.companyName}</Title>
       <p>
         {inv.inviterName ?? 'Your Admin'} invited <strong>{inv.email}</strong> as <strong>{inv.role}</strong>.
       </p>
       {inv.accountExists ? (
         state.status === 'signedIn' ? (
-          <form onSubmit={(e) => void accept(e)}>
-            <button disabled={busy}>{busy ? 'Joining…' : `Join ${inv.companyName}`}</button>
+          <form className="mt-4" onSubmit={(e) => void accept(e)}>
+            <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Joining…' : `Join ${inv.companyName}`}</Button>
           </form>
         ) : (
-          <p>
+          <p className="mt-3">
             You already have a Taabile account. <Link to="/login" state={{ from: `/accept-invite?token=${token}` }}>Sign in</Link>{' '}
             first, then this page will let you join.
           </p>
         )
       ) : (
-        <form onSubmit={(e) => void accept(e)}>
-          <label>
-            Your name
-            <input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label>
-            Choose a password
-            <input type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
-            <span className="muted small">At least 10 characters. Nobody, not even your Admin, can see it.</span>
-          </label>
-          <button disabled={busy}>{busy ? 'Creating account…' : 'Create my account'}</button>
+        <form className="mt-4 space-y-4" onSubmit={(e) => void accept(e)}>
+          <Field label="Your name">
+            <Input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Choose a password" hint="At least 10 characters. Nobody, not even your Admin, can see it.">
+            <Input type="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+          <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Creating account…' : 'Create my account'}</Button>
         </form>
       )}
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <ErrorText>{error}</ErrorText>}
     </Box>
   );
 }
 
+const Title = ({ children }: { children: React.ReactNode }) => <h1 className="mb-3 text-2xl font-bold">{children}</h1>;
+
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <div className="center">
-    <div className="card narrow">{children}</div>
-  </div>
+  <Center>
+    <Card className="w-full max-w-sm">{children}</Card>
+  </Center>
 );
