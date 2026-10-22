@@ -322,3 +322,37 @@ describe('products and units', () => {
     await db.query(`UPDATE products SET "allowFractions" = true WHERE id = $1`, [p]);
   });
 });
+
+describe('delete protection', () => {
+  const countRows = async (sql: string, params: unknown[]) => Number((await one<{ n: string }>(sql, params)).n);
+
+  it('a category that products use cannot be deleted, and the products keep their category (nothing is blanked)', async () => {
+    const cat = await one<{ id: string }>(`INSERT INTO categories ("companyId", name) VALUES ($1, $2) RETURNING id`, [A.companyId, `Used ${next()}`]);
+    const p = await one<{ id: string }>(
+      `INSERT INTO products ("companyId", sku, name, "baseUnit", "categoryId", "updatedAt") VALUES ($1, $2, 'Oil', 'bottle', $3, now()) RETURNING id`,
+      [A.companyId, `DP${next()}`, cat.id]);
+    await expect(db.query(`DELETE FROM categories WHERE id = $1`, [cat.id])).rejects.toThrow(/foreign key|violates/i);
+    expect(await countRows(`SELECT count(*) AS n FROM products WHERE id = $1 AND "categoryId" = $2`, [p.id, cat.id])).toBe(1);
+  });
+
+  it('an unused category can be deleted', async () => {
+    const cat = await one<{ id: string }>(`INSERT INTO categories ("companyId", name) VALUES ($1, $2) RETURNING id`, [A.companyId, `Spare ${next()}`]);
+    await db.query(`DELETE FROM categories WHERE id = $1`, [cat.id]);
+    expect(await countRows(`SELECT count(*) AS n FROM categories WHERE id = $1`, [cat.id])).toBe(0);
+  });
+
+  it('a price list that a customer uses cannot be deleted, and the customer keeps it', async () => {
+    const list = await one<{ id: string }>(`INSERT INTO price_lists ("companyId", name, kind) VALUES ($1, $2, 'WHOLESALE') RETURNING id`, [A.companyId, `PL ${next()}`]);
+    const c = await one<{ id: string }>(`INSERT INTO customers ("companyId", code, name, "priceListId") VALUES ($1, $2, 'Shop', $3) RETURNING id`, [A.companyId, `C${next()}`, list.id]);
+    await expect(db.query(`DELETE FROM price_lists WHERE id = $1`, [list.id])).rejects.toThrow(/foreign key|violates/i);
+    expect(await countRows(`SELECT count(*) AS n FROM customers WHERE id = $1 AND "priceListId" = $2`, [c.id, list.id])).toBe(1);
+  });
+
+  it('a product that has stock movements cannot be deleted', async () => {
+    const p = await one<{ id: string }>(`INSERT INTO products ("companyId", sku, name, "baseUnit", "updatedAt") VALUES ($1, $2, 'Flour', 'kg', now()) RETURNING id`, [A.companyId, `DP${next()}`]);
+    await db.query(
+      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById") VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`,
+      [A.companyId, A.locationId, p.id, uid()]);
+    await expect(db.query(`DELETE FROM products WHERE id = $1`, [p.id])).rejects.toThrow(/foreign key|violates/i);
+  });
+});

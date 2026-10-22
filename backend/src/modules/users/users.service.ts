@@ -4,7 +4,7 @@ import type { AuthContext } from '../../middleware/authenticate.js';
 import { writeAudit } from '../../shared/audit.js';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../../shared/errors.js';
 import type { RequestInfo } from '../auth/auth.service.js';
-import { PERMISSIONS, ROLES, ROLE_PRESETS, STAFF_TEMPLATES, can, effectivePermissions } from '../auth/permissions.js';
+import { PERMISSIONS, ROLES, SWITCHABLE_PERMISSIONS, ROLE_PRESETS, STAFF_TEMPLATES, can, effectivePermissions } from '../auth/permissions.js';
 import { assertLocationsExist } from '../locations/locations.service.js';
 import type { UpdateMemberInput } from './users.schemas.js';
 
@@ -69,7 +69,13 @@ async function assertAnotherActiveAdmin(tx: Tx, companyId: string, exceptUserId:
 
 /** Everything the Admin screen needs to build the permission switches. */
 export function permissionCatalog() {
-  return { roles: ROLES, permissions: PERMISSIONS, rolePresets: ROLE_PRESETS, staffTemplates: STAFF_TEMPLATES };
+  return { 
+    roles: ROLES,
+    permissions: PERMISSIONS,
+    Permissions: SWITCHABLE_PERMISSIONS,
+    rolePresets: ROLE_PRESETS,
+    staffTemplates: STAFF_TEMPLATES
+  };
 }
 
 export async function listMembers(auth: AuthContext) {

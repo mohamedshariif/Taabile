@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PERMISSIONS, ROLES } from '../auth/permissions.js';
+import { ADMIN_ONLY_PERMISSIONS, PERMISSIONS, ROLES } from '../auth/permissions.js';
 
 const permissionSchema = z.enum(PERMISSIONS);
 
@@ -17,6 +17,10 @@ export const updateMemberSchema = z
     (v) => v.role !== undefined || v.locationIds !== undefined || v.extraPermissions !== undefined || v.revokedPermissions !== undefined,
     { message: 'Send at least one thing to change' },
   )
+  .refine((v) => !(v.extraPermissions ?? []).some((p) => ADMIN_ONLY_PERMISSIONS.includes(p)), {
+    message: 'Permanent deletion is reserved for the Admin role and cannot be switched on for anyone else',
+    path: ['extraPermissions'],
+  })
   .refine((v) => !(v.extraPermissions ?? []).some((p) => (v.revokedPermissions ?? []).includes(p)), {
     message: 'A permission cannot be switched on and off at the same time',
     path: ['revokedPermissions'],

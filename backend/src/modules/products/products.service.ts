@@ -6,6 +6,7 @@ import { nextDocumentNumber } from '../../shared/documentNumber.js';
 import { badRequest, conflict, notFound } from '../../shared/errors.js';
 import { D } from '../../shared/money.js';
 import { pageArgs, toPage } from '../../shared/pagination.js';
+import { describeReferences, referencesTo } from '../../shared/references.js';
 import type {
   AddUnitInput,
   CreateProductInput,
@@ -13,6 +14,7 @@ import type {
   SetPricesInput,
   UpdateProductInput,
   UpdateUnitInput,
+  UpdateCategoryInput,
 } from './products.schemas.js';
 import { isWhole } from './units.js';
 
@@ -94,9 +96,12 @@ async function detail(tx: Tx, companyId: string, productId: string) {
 }
 
 async function assertCategory(tx: Tx, companyId: string, id: string) {
-  if (!(await tx.category.findFirst({ where: { id, companyId }, select: { id: true } }))) {
-    throw badRequest('That category does not exist');
-  }
+  const c = await tx.category.findFirst({
+    where: { id, companyId },
+    select: { status: true }
+  });
+  if (!c) throw badRequest('That category does not exist');
+  if (c.status !== 'ACTIVE') throw badRequest('That category is switched off. Choose another one or switch it back on.');
 }
 
 async function assertSkuFree(tx: Tx, companyId: string, sku: string, exceptProductId?: string) {
@@ -134,7 +139,14 @@ export async function listCategories(auth: AuthContext) {
       include: { _count: { select: { products: true } } },
     }),
   );
-  return { categories: rows.map((c) => ({ id: c.id, name: c.name, productCount: c._count.products })) };
+  return { 
+    categories: rows.map((c) => ({ 
+      id: c.id,
+      name: c.name,
+      productCount: c._count.products,
+      status: c.status,
+    }))
+  };
 }
 
 async function assertCategoryNameFree(tx: Tx, companyId: string, name: string, exceptId?: string) {
@@ -150,18 +162,51 @@ export async function createCategory(auth: AuthContext, name: string, ip?: strin
     await assertCategoryNameFree(tx, auth.companyId, name);
     const c = await tx.category.create({ data: { companyId: auth.companyId, name } });
     await writeAudit(tx, { companyId: auth.companyId, userId: auth.userId, action: 'category.created', entityType: 'category', entityId: c.id, after: { name }, ip });
-    return { category: { id: c.id, name: c.name, productCount: 0 } };
+    return { 
+      category: { id: c.id, name: c.name, status: c.status, productCount: 0 } 
+    };
   });
 }
 
-export async function renameCategory(auth: AuthContext, id: string, name: string, ip?: string) {
+export async function updateCategory(auth: AuthContext, id: string, input: UpdateCategoryInput, ip?: string) {
   return withTenant(auth, async (tx) => {
     const before = await tx.category.findFirst({ where: { id, companyId: auth.companyId } });
     if (!before) throw notFound('Category not found');
-    await assertCategoryNameFree(tx, auth.companyId, name, id);
-    const c = await tx.category.update({ where: { id }, data: { name }, include: { _count: { select: { products: true } } } });
-    await writeAudit(tx, { companyId: auth.companyId, userId: auth.userId, action: 'category.updated', entityType: 'category', entityId: id, before: { name: before.name }, after: { name }, ip });
-    return { category: { id: c.id, name: c.name, productCount: c._count.products } };
+    if (input.name !== undefined && input.name !== before.name) await assertCategoryNameFree(tx, auth.companyId, input.name, id);
+    const c = await tx.category.update({
+      where: { id },
+      data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.status !== undefined ? { status: input.status } : {}) },
+      include: { _count: { select: { products: true } } },
+    });
+    await writeAudit(tx, {
+      companyId: auth.companyId,
+      userId: auth.userId,
+      action: 'category.updated',
+      entityType: 'category',
+      entityId: id,
+      before: { name: before.name, status: before.status },
+      after: { name: c.name, status: c.status },
+      ip,
+    });
+    return { category: { id: c.id, name: c.name, status: c.status, productCount: c._count.products } };
+  });
+}
+
+/**
+ * Deletes a category that was created by mistake. Only an unused one can go: if any product still
+ * uses it, switch it off instead (so old products keep their category).
+ */
+export async function deleteCategory(auth: AuthContext, id: string, ip?: string) {
+  return withTenant(auth, async (tx) => {
+    const c = await tx.category.findFirst({ where: { id, companyId: auth.companyId } });
+    if (!c) throw notFound('Category not found');
+    const uses = await referencesTo(tx, 'categories', id);
+    if (uses.length > 0) {
+      throw conflict(`"${c.name}" is still used (${describeReferences(uses)}), so it cannot be deleted. Switch it off instead.`);
+    }
+    await tx.category.delete({ where: { id } });
+    await writeAudit(tx, { companyId: auth.companyId, userId: auth.userId, action: 'category.deleted', entityType: 'category', entityId: id, before: { name: c.name }, ip });
+    return { deleted: { id, name: c.name } };
   });
 }
 
@@ -169,7 +214,15 @@ export async function listPriceLists(auth: AuthContext) {
   const rows = await withTenant(auth, (tx) =>
     tx.priceList.findMany({ where: { companyId: auth.companyId }, orderBy: [{ isDefault: 'desc' }, { name: 'asc' }] }),
   );
-  return { priceLists: rows.map((l) => ({ id: l.id, name: l.name, kind: l.kind, isDefault: l.isDefault })) };
+  return { 
+    priceLists: rows.map((l) => ({ 
+      id: l.id,
+      name: l.name,
+      kind: l.kind,
+      status: l.status,
+      isDefault: l.isDefault
+    }))
+  };
 }
 
 // ───────────────────────── products ─────────────────────────
@@ -182,12 +235,12 @@ export async function listProducts(auth: AuthContext, q: ProductListQuery) {
       ...(q.categoryId ? { categoryId: q.categoryId } : {}),
       ...(q.search
         ? {
-            OR: [
-              { name: { contains: q.search, mode: 'insensitive' } },
-              { sku: { contains: q.search, mode: 'insensitive' } },
-              { productUnits: { some: { barcode: { contains: q.search, mode: 'insensitive' } } } },
-            ],
-          }
+          OR: [
+            { name: { contains: q.search, mode: 'insensitive' } },
+            { sku: { contains: q.search, mode: 'insensitive' } },
+            { productUnits: { some: { barcode: { contains: q.search, mode: 'insensitive' } } } },
+          ],
+        }
         : {}),
     };
     const rows = await tx.product.findMany({
@@ -288,7 +341,9 @@ export async function updateProduct(auth: AuthContext, id: string, input: Update
     if (input.name !== undefined) data.name = input.name;
     if (input.status !== undefined) data.status = input.status;
     if (input.categoryId !== undefined) {
-      if (input.categoryId) await assertCategory(tx, companyId, input.categoryId);
+      if (input.categoryId && input.categoryId !== before.categoryId) {
+        await assertCategory(tx, companyId, input.categoryId);
+      }
       data.category = input.categoryId ? { connect: { id: input.categoryId } } : { disconnect: true };
     }
     if (input.sku !== undefined && input.sku !== before.sku) {
@@ -332,6 +387,37 @@ export async function updateProduct(auth: AuthContext, id: string, input: Update
       ip,
     });
     return detail(tx, companyId, id);
+  });
+}
+
+/**
+ * Permanently deletes a product that was created by mistake and never used (Admin only, see the route).
+ * "Used" means anything at all still points at it: stock, purchases, sales, counts, transfers...
+ * (found from the database's own foreign keys, so later steps are covered automatically).
+ * A used product is switched off instead. Its units and prices are removed together with it.
+ */
+export async function deleteProduct(auth: AuthContext, id: string, ip?: string) {
+  return withTenant(auth, async (tx) => {
+    const companyId = auth.companyId;
+    await lockProduct(tx, companyId, id);
+    const p = await loadProduct(tx, companyId, id);
+    const uses = await referencesTo(tx, 'products', id, ['product_units', 'product_prices']);
+    if (uses.length > 0) {
+      throw conflict(`"${p.name}" has been used (${describeReferences(uses)}), so it cannot be deleted. Switch it off instead.`);
+    }
+    const prices = await tx.productPrice.deleteMany({ where: { productId: id } });
+    await tx.productUnit.deleteMany({ where: { productId: id } });
+    await tx.product.delete({ where: { id } });
+    await writeAudit(tx, {
+      companyId,
+      userId: auth.userId,
+      action: 'product.deleted',
+      entityType: 'product',
+      entityId: id,
+      before: { sku: p.sku, name: p.name, baseUnit: p.baseUnit, units: p.productUnits.map((u) => `${u.name}=${u.factorToBase.toFixed()}`), pricesRemoved: prices.count },
+      ip,
+    });
+    return { deleted: { id, sku: p.sku, name: p.name } };
   });
 }
 
@@ -405,7 +491,7 @@ export async function updateUnit(auth: AuthContext, productId: string, unitId: s
         if (usedUnitIds.includes(unitId)) {
           throw conflict(
             `"${unit.name}" is already used on purchases or sales, so its conversion cannot change without changing history. ` +
-              'Switch this unit off and add a new unit with the correct conversion.',
+            'Switch this unit off and add a new unit with the correct conversion.',
           );
         }
         assertFactorFitsProduct(p, input.factor);
@@ -451,7 +537,10 @@ export async function setPrices(auth: AuthContext, productId: string, input: Set
       const key = `${row.priceListId}:${row.unitId}`;
       if (seen.has(key)) throw badRequest('The same price list and unit appear twice');
       seen.add(key);
-      if (!lists.has(row.priceListId)) throw badRequest('That price list does not exist');
+      /* if (!lists.has(row.priceListId)) throw badRequest('That price list does not exist'); */
+      const list = lists.get(row.priceListId);
+      if (!list) throw badRequest('That price list does not exist');
+      if (row.price !== null && list.status !== 'ACTIVE') throw badRequest(`The price list "${list.name}" is switched off`);
       const unit = p.productUnits.find((u) => u.id === row.unitId);
       if (!unit) throw badRequest('That unit does not belong to this product');
       if (row.price !== null && (unit.status !== 'ACTIVE' || !unit.isSaleUnit)) {

@@ -15,6 +15,13 @@ export const skuSchema = z
   .toUpperCase()
   .regex(/^[A-Z0-9][A-Z0-9._-]{0,29}$/, 'Use up to 30 letters, numbers, . _ or -');
 
+export const updateCategorySchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter a name').max(60).optional(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.status !== undefined, { message: 'Send at least one field to change' });
+
 // A scanner reads letters/digits. Anything else (spaces, symbols) is almost certainly a typing mistake.
 export const barcodeSchema = z
   .string()
@@ -140,3 +147,4 @@ export type AddUnitInput = z.infer<typeof addUnitSchema>;
 export type UpdateUnitInput = z.infer<typeof updateUnitSchema>;
 export type SetPricesInput = z.infer<typeof setPricesSchema>;
 export type ProductListQuery = z.infer<typeof productListQuery>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

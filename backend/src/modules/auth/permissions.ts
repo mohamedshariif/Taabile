@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   'products.view',
   'products.manage',
   'prices.manage',
+  'records.delete',
   'sales.view',
   'sales.create',
   'sales.void',
@@ -41,6 +42,10 @@ export const PERMISSIONS = [
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+export const ADMIN_ONLY_PERMISSIONS: readonly Permission[] = ['records.delete'];
+/** The permissions an Admin can switch on or off for one person (everything except the Admin-only ones). */
+export const SWITCHABLE_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter((p) => !ADMIN_ONLY_PERMISSIONS.includes(p));
+
 type Grants = Partial<Record<Permission, Scope>>;
 
 const all = (): Grants => Object.fromEntries(PERMISSIONS.map((p) => [p, 'company'])) as Grants;
@@ -111,6 +116,7 @@ export interface Target {
 /** The scope this user has for a permission, or null if they do not have it. */
 export function scopeFor(p: Principal, perm: Permission): Scope | null {
   if (p.revokedPermissions.includes(perm)) return null;
+  if (p.role !== 'ADMIN' && ADMIN_ONLY_PERMISSIONS.includes(perm)) return null;
   const preset = ROLE_PRESETS[p.role][perm];
   if (preset) return preset;
   // Switched on for this user by the Admin: limited to their own locations.

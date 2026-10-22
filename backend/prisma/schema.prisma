@@ -63,16 +63,19 @@ enum TransferStatus {
   RECEIVED
   CANCELLED
 }
-/* enum TransferStatus {
-  REQUESTED
-  APPROVED
-  REJECTED
-  IN_TRANSIT
-  RECEIVED
-  DISCREPANCY
-  CLOSED
-  CANCELLED
-} */
+
+/**
+ * enum TransferStatus {
+ * REQUESTED
+ * APPROVED
+ * REJECTED
+ * IN_TRANSIT
+ * RECEIVED
+ * DISCREPANCY
+ * CLOSED
+ * CANCELLED
+ * }
+ */
 
 enum CountStatus {
   OPEN
@@ -255,9 +258,9 @@ model User {
 model Membership {
   id                  String               @id @default(uuid()) @db.Uuid
   companyId           String               @db.Uuid
-  company             Company              @relation(fields: [companyId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   userId              String               @db.Uuid
-  user                User                 @relation(fields: [userId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   role                Role
   status              RecordStatus         @default(ACTIVE)
   extraPermissions    String[]             @default([])
@@ -271,11 +274,11 @@ model Membership {
 
 model MembershipLocation {
   membershipId String     @db.Uuid
-  membership   Membership @relation(fields: [membershipId], references: [id])
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
   locationId   String     @db.Uuid
-  location     Location   @relation(fields: [locationId], references: [id])
+  location     Location   @relation(fields: [locationId], references: [id], onDelete: Restrict)
   companyId    String     @db.Uuid
-  company      Company    @relation(fields: [companyId], references: [id])
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@id([membershipId, locationId])
   @@map("membership_locations")
@@ -284,7 +287,7 @@ model MembershipLocation {
 model Invitation {
   id          String    @id @default(uuid()) @db.Uuid
   companyId   String    @db.Uuid
-  company     Company   @relation(fields: [companyId], references: [id])
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
   email       String
   role        Role
   locationIds String[]  @default([])
@@ -300,15 +303,15 @@ model Invitation {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid
-  activeCompanyId String   @db.Uuid
-  user      User      @relation(fields: [userId], references: [id])
-  tokenHash String    @unique
-  userAgent String?
-  expiresAt DateTime  @db.Timestamptz(3)
-  revokedAt DateTime? @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  activeCompanyId String    @db.Uuid
+  user            User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  tokenHash       String    @unique
+  userAgent       String?
+  expiresAt       DateTime  @db.Timestamptz(3)
+  revokedAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([userId])
   @@map("refresh_tokens")
@@ -317,7 +320,7 @@ model RefreshToken {
 model Location {
   id                  String               @id @default(uuid()) @db.Uuid
   companyId           String               @db.Uuid
-  company             Company              @relation(fields: [companyId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name                String
   code                String
   type                LocationType
@@ -346,7 +349,7 @@ model Location {
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
   companyId  String?  @db.Uuid
-  company    Company? @relation(fields: [companyId], references: [id])
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: Restrict)
   userId     String?  @db.Uuid
   action     String
   entityType String
@@ -364,7 +367,7 @@ model AuditLog {
 model DocumentSequence {
   id         String  @id @default(uuid()) @db.Uuid
   companyId  String  @db.Uuid
-  company    Company @relation(fields: [companyId], references: [id])
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
   docType    String
   scopeKey   String
   prefix     String
@@ -377,7 +380,7 @@ model DocumentSequence {
 model IdempotencyKey {
   id             String   @id @default(uuid()) @db.Uuid
   companyId      String   @db.Uuid
-  company        Company  @relation(fields: [companyId], references: [id])
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   userId         String   @db.Uuid
   key            String
   requestHash    String
@@ -392,10 +395,11 @@ model IdempotencyKey {
 // ───────────────────────── Catalog and parties ─────────────────────────
 
 model Category {
-  id        String    @id @default(uuid()) @db.Uuid
-  companyId String    @db.Uuid
-  company   Company   @relation(fields: [companyId], references: [id])
+  id        String       @id @default(uuid()) @db.Uuid
+  companyId String       @db.Uuid
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name      String
+  status    RecordStatus @default(ACTIVE)
   products  Product[]
 
   @@unique([companyId, name])
@@ -405,13 +409,13 @@ model Category {
 model Product {
   id                   String                @id @default(uuid()) @db.Uuid
   companyId            String                @db.Uuid
-  company              Company               @relation(fields: [companyId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   sku                  String
   name                 String
   categoryId           String?               @db.Uuid
-  category             Category?             @relation(fields: [categoryId], references: [id])
+  category             Category?             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   baseUnit             String
-  allowFractions       Boolean        @default(false)
+  allowFractions       Boolean               @default(false)
   imageUrl             String?
   status               RecordStatus          @default(ACTIVE)
   createdAt            DateTime              @default(now()) @db.Timestamptz(3)
@@ -432,9 +436,9 @@ model Product {
 model ProductUnit {
   id                   String                @id @default(uuid()) @db.Uuid
   companyId            String                @db.Uuid
-  company              Company               @relation(fields: [companyId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   productId            String                @db.Uuid
-  product              Product               @relation(fields: [productId], references: [id])
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
   name                 String
   factorToBase         Decimal               @default(1) @db.Decimal(18, 6)
   isBase               Boolean               @default(false)
@@ -454,10 +458,11 @@ model ProductUnit {
 model PriceList {
   id            String         @id @default(uuid()) @db.Uuid
   companyId     String         @db.Uuid
-  company       Company        @relation(fields: [companyId], references: [id])
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name          String
   kind          PriceListKind
   isDefault     Boolean        @default(false)
+  status        RecordStatus   @default(ACTIVE)
   productPrices ProductPrice[]
   customers     Customer[]
 
@@ -468,13 +473,13 @@ model PriceList {
 model ProductPrice {
   id            String      @id @default(uuid()) @db.Uuid
   companyId     String      @db.Uuid
-  company       Company     @relation(fields: [companyId], references: [id])
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
   priceListId   String      @db.Uuid
-  priceList     PriceList   @relation(fields: [priceListId], references: [id])
+  priceList     PriceList   @relation(fields: [priceListId], references: [id], onDelete: Restrict)
   productId     String      @db.Uuid
-  product       Product     @relation(fields: [productId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
   productUnitId String      @db.Uuid
-  productUnit   ProductUnit @relation(fields: [productUnitId], references: [id])
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
   price         Decimal     @db.Decimal(19, 4)
 
   @@unique([priceListId, productUnitId])
@@ -484,13 +489,13 @@ model ProductPrice {
 model Customer {
   id               String        @id @default(uuid()) @db.Uuid
   companyId        String        @db.Uuid
-  company          Company       @relation(fields: [companyId], references: [id])
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
   code             String
   name             String
   phone            String?
   address          String?
   priceListId      String?       @db.Uuid
-  priceList        PriceList?    @relation(fields: [priceListId], references: [id])
+  priceList        PriceList?    @relation(fields: [priceListId], references: [id], onDelete: Restrict)
   creditLimit      Decimal?      @db.Decimal(19, 4)
   paymentTermsDays Int           @default(0)
   status           RecordStatus  @default(ACTIVE)
@@ -506,7 +511,7 @@ model Customer {
 model Supplier {
   id               String            @id @default(uuid()) @db.Uuid
   companyId        String            @db.Uuid
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   code             String
   name             String
   phone            String?
@@ -527,11 +532,11 @@ model Supplier {
 model StockBalance {
   id         String   @id @default(uuid()) @db.Uuid
   companyId  String   @db.Uuid
-  company    Company  @relation(fields: [companyId], references: [id])
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   locationId String   @db.Uuid
-  location   Location @relation(fields: [locationId], references: [id])
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
   productId  String   @db.Uuid
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   onHand     Decimal  @default(0) @db.Decimal(18, 4)
   committed  Decimal  @default(0) @db.Decimal(18, 4)
   avgCost    Decimal  @default(0) @db.Decimal(19, 6)
@@ -545,11 +550,11 @@ model StockBalance {
 model StockMovement {
   id           String         @id @default(uuid()) @db.Uuid
   companyId    String         @db.Uuid
-  company      Company        @relation(fields: [companyId], references: [id])
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   locationId   String         @db.Uuid
-  location     Location       @relation(fields: [locationId], references: [id])
+  location     Location       @relation(fields: [locationId], references: [id], onDelete: Restrict)
   productId    String         @db.Uuid
-  product      Product        @relation(fields: [productId], references: [id])
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
   type         MovementType
   quantity     Decimal        @db.Decimal(18, 4)
   unitCost     Decimal        @default(0) @db.Decimal(19, 6)
@@ -561,7 +566,7 @@ model StockMovement {
   createdById  String         @db.Uuid
   createdAt    DateTime       @default(now()) @db.Timestamptz(3)
   reversalOfId String?        @unique @db.Uuid
-  reversalOf   StockMovement? @relation("MovementReversal", fields: [reversalOfId], references: [id])
+  reversalOf   StockMovement? @relation("MovementReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversedBy   StockMovement? @relation("MovementReversal")
 
   @@index([companyId, locationId, productId, occurredAt])
@@ -572,12 +577,12 @@ model StockMovement {
 model Transfer {
   id             String         @id @default(uuid()) @db.Uuid
   companyId      String         @db.Uuid
-  company        Company        @relation(fields: [companyId], references: [id])
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number         String
   fromLocationId String         @db.Uuid
-  fromLocation   Location       @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  fromLocation   Location       @relation("TransferFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
   toLocationId   String         @db.Uuid
-  toLocation     Location       @relation("TransferTo", fields: [toLocationId], references: [id])
+  toLocation     Location       @relation("TransferTo", fields: [toLocationId], references: [id], onDelete: Restrict)
   status         TransferStatus @default(REQUESTED)
   requestedById  String         @db.Uuid
   approvedById   String?        @db.Uuid
@@ -597,11 +602,11 @@ model Transfer {
 model TransferLine {
   id              String   @id @default(uuid()) @db.Uuid
   companyId       String   @db.Uuid
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   transferId      String   @db.Uuid
-  transfer        Transfer @relation(fields: [transferId], references: [id])
+  transfer        Transfer @relation(fields: [transferId], references: [id], onDelete: Restrict)
   productId       String   @db.Uuid
-  product         Product  @relation(fields: [productId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   qtyRequested    Decimal  @db.Decimal(18, 4)
   qtyDispatched   Decimal  @default(0) @db.Decimal(18, 4)
   qtyReceived     Decimal  @default(0) @db.Decimal(18, 4)
@@ -614,10 +619,10 @@ model TransferLine {
 model StockCount {
   id              String           @id @default(uuid()) @db.Uuid
   companyId       String           @db.Uuid
-  company         Company          @relation(fields: [companyId], references: [id])
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number          String
   locationId      String           @db.Uuid
-  location        Location         @relation(fields: [locationId], references: [id])
+  location        Location         @relation(fields: [locationId], references: [id], onDelete: Restrict)
   status          CountStatus      @default(OPEN)
   countedAt       DateTime         @db.Timestamptz(3)
   countedById     String           @db.Uuid
@@ -633,11 +638,11 @@ model StockCount {
 model StockCountLine {
   id          String     @id @default(uuid()) @db.Uuid
   companyId   String     @db.Uuid
-  company     Company    @relation(fields: [companyId], references: [id])
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   countId     String     @db.Uuid
-  count       StockCount @relation(fields: [countId], references: [id])
+  count       StockCount @relation(fields: [countId], references: [id], onDelete: Restrict)
   productId   String     @db.Uuid
-  product     Product    @relation(fields: [productId], references: [id])
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
   expectedQty Decimal    @db.Decimal(18, 4)
   countedQty  Decimal    @db.Decimal(18, 4)
   difference  Decimal    @db.Decimal(18, 4)
@@ -652,12 +657,12 @@ model StockCountLine {
 model PurchaseReceipt {
   id                   String                @id @default(uuid()) @db.Uuid
   companyId            String                @db.Uuid
-  company              Company               @relation(fields: [companyId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number               String
   supplierId           String                @db.Uuid
-  supplier             Supplier              @relation(fields: [supplierId], references: [id])
+  supplier             Supplier              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   locationId           String                @db.Uuid
-  location             Location              @relation(fields: [locationId], references: [id])
+  location             Location              @relation(fields: [locationId], references: [id], onDelete: Restrict)
   containerRef         String?
   supplierInvoiceRef   String?
   invoiceDate          DateTime?             @db.Date
@@ -683,13 +688,13 @@ model PurchaseReceipt {
 model PurchaseReceiptLine {
   id                 String          @id @default(uuid()) @db.Uuid
   companyId          String          @db.Uuid
-  company            Company         @relation(fields: [companyId], references: [id])
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   receiptId          String          @db.Uuid
-  receipt            PurchaseReceipt @relation(fields: [receiptId], references: [id])
+  receipt            PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   productId          String          @db.Uuid
-  product            Product         @relation(fields: [productId], references: [id])
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
   productUnitId      String          @db.Uuid
-  productUnit        ProductUnit     @relation(fields: [productUnitId], references: [id])
+  productUnit        ProductUnit     @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
   qtyExpected        Decimal         @db.Decimal(18, 4)
   qtyReceived        Decimal         @db.Decimal(18, 4)
   qtyDamaged         Decimal         @default(0) @db.Decimal(18, 4)
@@ -704,9 +709,9 @@ model PurchaseReceiptLine {
 model PurchaseCost {
   id        String          @id @default(uuid()) @db.Uuid
   companyId String          @db.Uuid
-  company   Company         @relation(fields: [companyId], references: [id])
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   receiptId String          @db.Uuid
-  receipt   PurchaseReceipt @relation(fields: [receiptId], references: [id])
+  receipt   PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   type      CostType
   amount    Decimal         @db.Decimal(19, 4)
   note      String?
@@ -719,14 +724,14 @@ model PurchaseCost {
 model Sale {
   id                 String              @id @default(uuid()) @db.Uuid
   companyId          String              @db.Uuid
-  company            Company             @relation(fields: [companyId], references: [id])
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number             String
   locationId         String              @db.Uuid
-  location           Location            @relation(fields: [locationId], references: [id])
+  location           Location            @relation(fields: [locationId], references: [id], onDelete: Restrict)
   customerId         String?             @db.Uuid
-  customer           Customer?           @relation(fields: [customerId], references: [id])
+  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   status             DocStatus           @default(POSTED)
-  type      SaleType       @default(RETAIL)
+  type               SaleType            @default(RETAIL)
   paymentStatus      PaymentStatus       @default(UNPAID)
   fulfillmentStatus  FulfillmentStatus   @default(PENDING)
   subtotal           Decimal             @db.Decimal(19, 4)
@@ -756,13 +761,13 @@ model Sale {
 model SaleLine {
   id                  String               @id @default(uuid()) @db.Uuid
   companyId           String               @db.Uuid
-  company             Company              @relation(fields: [companyId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
   saleId              String               @db.Uuid
-  sale                Sale                 @relation(fields: [saleId], references: [id])
+  sale                Sale                 @relation(fields: [saleId], references: [id], onDelete: Restrict)
   productId           String               @db.Uuid
-  product             Product              @relation(fields: [productId], references: [id])
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
   productUnitId       String               @db.Uuid
-  productUnit         ProductUnit          @relation(fields: [productUnitId], references: [id])
+  productUnit         ProductUnit          @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
   quantity            Decimal              @db.Decimal(18, 4)
   quantityBase        Decimal              @db.Decimal(18, 4)
   unitPrice           Decimal              @db.Decimal(19, 4)
@@ -779,11 +784,11 @@ model SaleLine {
 model SaleLineAllocation {
   id               String            @id @default(uuid()) @db.Uuid
   companyId        String            @db.Uuid
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   saleLineId       String            @db.Uuid
-  saleLine         SaleLine          @relation(fields: [saleLineId], references: [id])
+  saleLine         SaleLine          @relation(fields: [saleLineId], references: [id], onDelete: Restrict)
   supplyLocationId String            @db.Uuid
-  supplyLocation   Location          @relation(fields: [supplyLocationId], references: [id])
+  supplyLocation   Location          @relation(fields: [supplyLocationId], references: [id], onDelete: Restrict)
   qtyBase          Decimal           @db.Decimal(18, 4)
   qtyReleased      Decimal           @default(0) @db.Decimal(18, 4)
   saleReleaseLines SaleReleaseLine[]
@@ -795,11 +800,11 @@ model SaleLineAllocation {
 model SaleRelease {
   id               String            @id @default(uuid()) @db.Uuid
   companyId        String            @db.Uuid
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   saleId           String            @db.Uuid
-  sale             Sale              @relation(fields: [saleId], references: [id])
+  sale             Sale              @relation(fields: [saleId], references: [id], onDelete: Restrict)
   locationId       String            @db.Uuid
-  location         Location          @relation(fields: [locationId], references: [id])
+  location         Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
   releasedById     String            @db.Uuid
   releasedAt       DateTime          @default(now()) @db.Timestamptz(3)
   note             String?
@@ -811,11 +816,11 @@ model SaleRelease {
 model SaleReleaseLine {
   id           String             @id @default(uuid()) @db.Uuid
   companyId    String             @db.Uuid
-  company      Company            @relation(fields: [companyId], references: [id])
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   releaseId    String             @db.Uuid
-  release      SaleRelease        @relation(fields: [releaseId], references: [id])
+  release      SaleRelease        @relation(fields: [releaseId], references: [id], onDelete: Restrict)
   allocationId String             @db.Uuid
-  allocation   SaleLineAllocation @relation(fields: [allocationId], references: [id])
+  allocation   SaleLineAllocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
   qtyBase      Decimal            @db.Decimal(18, 4)
 
   @@map("sale_release_lines")
@@ -824,10 +829,10 @@ model SaleReleaseLine {
 model SaleReturn {
   id              String           @id @default(uuid()) @db.Uuid
   companyId       String           @db.Uuid
-  company         Company          @relation(fields: [companyId], references: [id])
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number          String
   saleId          String           @db.Uuid
-  sale            Sale             @relation(fields: [saleId], references: [id])
+  sale            Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
   reason          String
   subtotal        Decimal          @db.Decimal(19, 4)
   taxTotal        Decimal          @default(0) @db.Decimal(19, 4)
@@ -844,16 +849,16 @@ model SaleReturn {
 model SaleReturnLine {
   id           String     @id @default(uuid()) @db.Uuid
   companyId    String     @db.Uuid
-  company      Company    @relation(fields: [companyId], references: [id])
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   returnId     String     @db.Uuid
-  saleReturn   SaleReturn @relation(fields: [returnId], references: [id])
+  saleReturn   SaleReturn @relation(fields: [returnId], references: [id], onDelete: Restrict)
   saleLineId   String     @db.Uuid
-  saleLine     SaleLine   @relation(fields: [saleLineId], references: [id])
+  saleLine     SaleLine   @relation(fields: [saleLineId], references: [id], onDelete: Restrict)
   quantityBase Decimal    @db.Decimal(18, 4)
   amount       Decimal    @db.Decimal(19, 4)
   restock      Boolean    @default(true)
   locationId   String?    @db.Uuid
-  location     Location?  @relation(fields: [locationId], references: [id])
+  location     Location?  @relation(fields: [locationId], references: [id], onDelete: Restrict)
 
   @@map("sale_return_lines")
 }
@@ -863,13 +868,13 @@ model SaleReturnLine {
 model FinancialAccount {
   id                    String                @id @default(uuid()) @db.Uuid
   companyId             String                @db.Uuid
-  company               Company               @relation(fields: [companyId], references: [id])
+  company               Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name                  String
   type                  FinancialAccountType
   locationId            String?               @db.Uuid
-  location              Location?             @relation(fields: [locationId], references: [id])
+  location              Location?             @relation(fields: [locationId], references: [id], onDelete: Restrict)
   ledgerAccountId       String                @db.Uuid
-  ledgerAccount         Account               @relation(fields: [ledgerAccountId], references: [id])
+  ledgerAccount         Account               @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
   status                RecordStatus          @default(ACTIVE)
   payments              Payment[]
   fundsOut              FundsTransfer[]       @relation("FundsFrom")
@@ -884,15 +889,15 @@ model FinancialAccount {
 model Payment {
   id                 String              @id @default(uuid()) @db.Uuid
   companyId          String              @db.Uuid
-  company            Company             @relation(fields: [companyId], references: [id])
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number             String
   partyType          PartyType
   customerId         String?             @db.Uuid
-  customer           Customer?           @relation(fields: [customerId], references: [id])
+  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   supplierId         String?             @db.Uuid
-  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   financialAccountId String              @db.Uuid
-  financialAccount   FinancialAccount    @relation(fields: [financialAccountId], references: [id])
+  financialAccount   FinancialAccount    @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
   method             PaymentMethod
   amount             Decimal             @db.Decimal(19, 4)
   paidAt             DateTime            @db.Timestamptz(3)
@@ -911,13 +916,13 @@ model Payment {
 model PaymentAllocation {
   id                String           @id @default(uuid()) @db.Uuid
   companyId         String           @db.Uuid
-  company           Company          @relation(fields: [companyId], references: [id])
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   paymentId         String           @db.Uuid
-  payment           Payment          @relation(fields: [paymentId], references: [id])
+  payment           Payment          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   saleId            String?          @db.Uuid
-  sale              Sale?            @relation(fields: [saleId], references: [id])
+  sale              Sale?            @relation(fields: [saleId], references: [id], onDelete: Restrict)
   purchaseReceiptId String?          @db.Uuid
-  purchaseReceipt   PurchaseReceipt? @relation(fields: [purchaseReceiptId], references: [id])
+  purchaseReceipt   PurchaseReceipt? @relation(fields: [purchaseReceiptId], references: [id], onDelete: Restrict)
   amount            Decimal          @db.Decimal(19, 4)
   createdById       String           @db.Uuid
   createdAt         DateTime         @default(now()) @db.Timestamptz(3)
@@ -929,13 +934,13 @@ model PaymentAllocation {
 model FundsTransfer {
   id               String            @id @default(uuid()) @db.Uuid
   companyId        String            @db.Uuid
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number           String
   type             FundsTransferType
   fromAccountId    String            @db.Uuid
-  fromAccount      FinancialAccount  @relation("FundsFrom", fields: [fromAccountId], references: [id])
+  fromAccount      FinancialAccount  @relation("FundsFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
   toAccountId      String            @db.Uuid
-  toAccount        FinancialAccount  @relation("FundsTo", fields: [toAccountId], references: [id])
+  toAccount        FinancialAccount  @relation("FundsTo", fields: [toAccountId], references: [id], onDelete: Restrict)
   amount           Decimal           @db.Decimal(19, 4)
   expectedAmount   Decimal?          @db.Decimal(19, 4)
   countedAmount    Decimal?          @db.Decimal(19, 4)
@@ -953,12 +958,13 @@ model FundsTransfer {
 }
 
 model ExpenseCategory {
-  id              String    @id @default(uuid()) @db.Uuid
-  companyId       String    @db.Uuid
-  company         Company   @relation(fields: [companyId], references: [id])
+  id              String       @id @default(uuid()) @db.Uuid
+  companyId       String       @db.Uuid
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name            String
-  ledgerAccountId String    @db.Uuid
-  ledgerAccount   Account   @relation(fields: [ledgerAccountId], references: [id])
+  ledgerAccountId String       @db.Uuid
+  ledgerAccount   Account      @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  status          RecordStatus @default(ACTIVE)
   expenses        Expense[]
 
   @@unique([companyId, name])
@@ -968,22 +974,22 @@ model ExpenseCategory {
 model Expense {
   id                 String            @id @default(uuid()) @db.Uuid
   companyId          String            @db.Uuid
-  company            Company           @relation(fields: [companyId], references: [id])
+  company            Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number             String
   locationId         String?           @db.Uuid
-  location           Location?         @relation(fields: [locationId], references: [id])
+  location           Location?         @relation(fields: [locationId], references: [id], onDelete: Restrict)
   categoryId         String            @db.Uuid
-  category           ExpenseCategory   @relation(fields: [categoryId], references: [id])
+  category           ExpenseCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   amount             Decimal           @db.Decimal(19, 4)
   incurredAt         DateTime          @db.Timestamptz(3)
   description        String
   payStatus          ExpensePayStatus  @default(PAID)
   financialAccountId String?           @db.Uuid
-  financialAccount   FinancialAccount? @relation(fields: [financialAccountId], references: [id])
+  financialAccount   FinancialAccount? @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
   supplierId         String?           @db.Uuid
-  supplier           Supplier?         @relation(fields: [supplierId], references: [id])
+  supplier           Supplier?         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   paidByEmployeeId   String?           @db.Uuid
-  paidByEmployee     Employee?         @relation(fields: [paidByEmployeeId], references: [id])
+  paidByEmployee     Employee?         @relation(fields: [paidByEmployeeId], references: [id], onDelete: Restrict)
   status             DocStatus         @default(POSTED)
   evidenceUrl        String?
   createdById        String            @db.Uuid
@@ -1000,14 +1006,14 @@ model Expense {
 model Employee {
   id                    String                @id @default(uuid()) @db.Uuid
   companyId             String                @db.Uuid
-  company               Company               @relation(fields: [companyId], references: [id])
+  company               Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   userId                String?               @unique @db.Uuid
-  user                  User?                 @relation(fields: [userId], references: [id])
+  user                  User?                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   name                  String
   phone                 String?
   position              String?
   locationId            String?               @db.Uuid
-  location              Location?             @relation(fields: [locationId], references: [id])
+  location              Location?             @relation(fields: [locationId], references: [id], onDelete: Restrict)
   status                RecordStatus          @default(ACTIVE)
   startedOn             DateTime?             @db.Date
   expenses              Expense[]
@@ -1021,9 +1027,9 @@ model Employee {
 model SalaryAgreement {
   id            String    @id @default(uuid()) @db.Uuid
   companyId     String    @db.Uuid
-  company       Company   @relation(fields: [companyId], references: [id])
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
   employeeId    String    @db.Uuid
-  employee      Employee  @relation(fields: [employeeId], references: [id])
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   monthlyAmount Decimal   @db.Decimal(19, 4)
   effectiveFrom DateTime  @db.Date
   endedOn       DateTime? @db.Date
@@ -1034,14 +1040,14 @@ model SalaryAgreement {
 model EmployeeLedgerEntry {
   id                 String             @id @default(uuid()) @db.Uuid
   companyId          String             @db.Uuid
-  company            Company            @relation(fields: [companyId], references: [id])
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   employeeId         String             @db.Uuid
-  employee           Employee           @relation(fields: [employeeId], references: [id])
+  employee           Employee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   type               EmployeeLedgerType
   amount             Decimal            @db.Decimal(19, 4)
   period             String?
   financialAccountId String?            @db.Uuid
-  financialAccount   FinancialAccount?  @relation(fields: [financialAccountId], references: [id])
+  financialAccount   FinancialAccount?  @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
   occurredAt         DateTime           @db.Timestamptz(3)
   note               String?
   createdById        String             @db.Uuid
@@ -1056,12 +1062,12 @@ model EmployeeLedgerEntry {
 model Account {
   id                String             @id @default(uuid()) @db.Uuid
   companyId         String             @db.Uuid
-  company           Company            @relation(fields: [companyId], references: [id])
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   code              String
   name              String
   type              AccountType
   parentId          String?            @db.Uuid
-  parent            Account?           @relation("AccountParent", fields: [parentId], references: [id])
+  parent            Account?           @relation("AccountParent", fields: [parentId], references: [id], onDelete: Restrict)
   children          Account[]          @relation("AccountParent")
   systemKey         String?
   isPostable        Boolean            @default(true)
@@ -1078,7 +1084,7 @@ model Account {
 model AccountingPeriod {
   id             String         @id @default(uuid()) @db.Uuid
   companyId      String         @db.Uuid
-  company        Company        @relation(fields: [companyId], references: [id])
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   year           Int
   month          Int
   status         PeriodStatus   @default(OPEN)
@@ -1093,11 +1099,11 @@ model AccountingPeriod {
 model JournalEntry {
   id           String           @id @default(uuid()) @db.Uuid
   companyId    String           @db.Uuid
-  company      Company          @relation(fields: [companyId], references: [id])
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   number       String
   entryDate    DateTime         @db.Date
   periodId     String           @db.Uuid
-  period       AccountingPeriod @relation(fields: [periodId], references: [id])
+  period       AccountingPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
   description  String
   sourceType   String
   sourceId     String?          @db.Uuid
@@ -1106,7 +1112,7 @@ model JournalEntry {
   createdById  String           @db.Uuid
   createdAt    DateTime         @default(now()) @db.Timestamptz(3)
   reversalOfId String?          @unique @db.Uuid
-  reversalOf   JournalEntry?    @relation("EntryReversal", fields: [reversalOfId], references: [id])
+  reversalOf   JournalEntry?    @relation("EntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversedBy   JournalEntry?    @relation("EntryReversal")
   journalLines JournalLine[]
 
@@ -1120,21 +1126,21 @@ model JournalEntry {
 model JournalLine {
   id         String       @id @default(uuid()) @db.Uuid
   companyId  String       @db.Uuid
-  company    Company      @relation(fields: [companyId], references: [id])
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
   entryId    String       @db.Uuid
-  entry      JournalEntry @relation(fields: [entryId], references: [id])
+  entry      JournalEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
   accountId  String       @db.Uuid
-  account    Account      @relation(fields: [accountId], references: [id])
+  account    Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
   debit      Decimal      @default(0) @db.Decimal(19, 4)
   credit     Decimal      @default(0) @db.Decimal(19, 4)
   locationId String?      @db.Uuid
-  location   Location?    @relation(fields: [locationId], references: [id])
+  location   Location?    @relation(fields: [locationId], references: [id], onDelete: Restrict)
   customerId String?      @db.Uuid
-  customer   Customer?    @relation(fields: [customerId], references: [id])
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   supplierId String?      @db.Uuid
-  supplier   Supplier?    @relation(fields: [supplierId], references: [id])
+  supplier   Supplier?    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   employeeId String?      @db.Uuid
-  employee   Employee?    @relation(fields: [employeeId], references: [id])
+  employee   Employee?    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   memo       String?
 
   @@index([companyId, accountId])

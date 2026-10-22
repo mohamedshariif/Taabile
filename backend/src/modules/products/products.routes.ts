@@ -14,6 +14,7 @@ import {
   setPricesSchema,
   updateProductSchema,
   updateUnitSchema,
+  updateCategorySchema,
 } from './products.schemas.js';
 import * as products from './products.service.js';
 
@@ -24,6 +25,7 @@ import * as products from './products.service.js';
 const view = [authenticate, requirePermission('products.view')];
 const manage = [authenticate, requirePermission('products.manage')];
 const pricing = [authenticate, requirePermission('prices.manage')];
+const erase = [authenticate, requirePermission('records.delete')];
 
 export const productsRouter = Router();
 
@@ -89,6 +91,12 @@ productsRouter.put(
   asyncHandler(async (req, res) => res.json(await products.setPrices(getAuth(req), uuidParam(req.params.id), req.body, req.ip))),
 );
 
+productsRouter.delete(
+  '/:id',
+  ...erase,
+  asyncHandler(async (req, res) => res.json(await products.deleteProduct(getAuth(req), uuidParam(req.params.id), req.ip)))
+);
+
 // ── Categories (a flat list) ──
 export const categoriesRouter = Router();
 categoriesRouter.get('/', ...view, asyncHandler(async (req, res) => res.json(await products.listCategories(getAuth(req)))));
@@ -101,9 +109,10 @@ categoriesRouter.post(
 categoriesRouter.patch(
   '/:id',
   ...manage,
-  validateBody(categoryNameSchema),
-  asyncHandler(async (req, res) => res.json(await products.renameCategory(getAuth(req), uuidParam(req.params.id), req.body.name, req.ip))),
+  validateBody(updateCategorySchema),
+  asyncHandler(async (req, res) => res.json(await products.updateCategory(getAuth(req), uuidParam(req.params.id), req.body, req.ip))),
 );
+categoriesRouter.delete('/:id', ...erase, asyncHandler(async (req, res) => res.json(await products.deleteCategory(getAuth(req), uuidParam(req.params.id), req.ip))));
 
 // ── Price lists (Retail and Wholesale are created with the company) ──
 export const priceListsRouter = Router();

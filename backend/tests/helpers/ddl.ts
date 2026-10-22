@@ -8,6 +8,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const wasm = require('@prisma/prisma-schema-wasm') as { get_dmmf: (p: string) => string };
 
+// What Prisma's migration writes for each referential action (its defaults: required = RESTRICT, optional = SET NULL).
+const onDelete = (action: string | undefined, required: boolean): string =>
+  ({ Restrict: 'RESTRICT', Cascade: 'CASCADE', SetNull: 'SET NULL', NoAction: 'NO ACTION', SetDefault: 'SET DEFAULT' })[action ?? ''] ??
+  (required ? 'RESTRICT' : 'SET NULL');
+
 interface Field {
   name: string;
   kind: 'scalar' | 'enum' | 'object';
@@ -21,6 +26,7 @@ interface Field {
   nativeType?: [string, string[]] | null;
   relationFromFields?: string[];
   relationToFields?: string[];
+  relationOnDelete?: string;
 }
 interface Model {
   name: string;
@@ -79,7 +85,7 @@ export function buildDdl(schemaPath = 'prisma/schema.prisma'): string {
       if (f.kind === 'object') {
         if (f.relationFromFields?.length) {
           fks.push(
-            `ALTER TABLE ${table(m.name)} ADD FOREIGN KEY (${f.relationFromFields.map(q).join(', ')}) REFERENCES ${table(f.type)} (${f.relationToFields!.map(q).join(', ')});`,
+            `ALTER TABLE ${table(m.name)} ADD FOREIGN KEY (${f.relationFromFields.map(q).join(', ')}) REFERENCES ${table(f.type)} (${f.relationToFields!.map(q).join(', ')}) ON DELETE ${onDelete(f.relationOnDelete, f.isRequired)} ON UPDATE CASCADE;`,
           );
         }
         continue;
