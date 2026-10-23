@@ -58,13 +58,20 @@ export function Button({
 const CONTROL =
   'mt-1 block w-full min-h-11 rounded-lg border border-line bg-page px-3 py-2 text-base text-ink placeholder:text-muted/70 disabled:opacity-60';
 
-/** A label above a control, with an optional hint underneath:  <Field label="Email" hint="..."><Input/></Field> */
-export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+/**
+ * A label above a control, with an optional hint underneath, or an error message instead of the hint:
+ *   <Field label="Email" hint="..." error={problems.email}><Input/></Field>
+ */
+export function Field({ label, hint, error, children, className }: { label: string; hint?: string; error?: string; children: ReactNode; className?: string }) {
   return (
     <label className={cx('block', className)}>
       <span className="block font-semibold">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-sm font-normal text-muted">{hint}</span>}
+      {error ? (
+        <span role="alert" className="mt-1 block text-sm font-normal text-danger">{error}</span>
+      ) : (
+        hint && <span className="mt-1 block text-sm font-normal text-muted">{hint}</span>
+      )}
     </label>
   );
 }

@@ -85,3 +85,53 @@ export interface InvitationResult {
   invitation: Invitation;
   devLink?: string;
 }
+
+// ── Products (F2) ──
+export interface Category {
+  id: string;
+  name: string;
+  status: RecordStatus;
+  productCount: number;
+}
+
+export interface PriceList {
+  id: string;
+  name: string;
+  kind: string;
+  isDefault: boolean;
+  status: RecordStatus;
+}
+
+export interface ProductUnit {
+  id: string;
+  name: string;
+  /** How many BASE units one of these holds, as text: "50" for a sack of 50 kg. The base unit itself is "1". */
+  factor: string;
+  isBase: boolean;
+  isPurchaseUnit: boolean;
+  isSaleUnit: boolean;
+  barcode: string | null;
+  status: RecordStatus;
+}
+
+export interface ProductSummary {
+  id: string;
+  sku: string;
+  name: string;
+  status: RecordStatus;
+  category: { id: string; name: string } | null;
+  baseUnit: string;
+  allowFractions: boolean;
+  units: ProductUnit[];
+}
+
+export interface ProductDetail extends ProductSummary {
+  /** What can no longer change because the product has stock history. */
+  locks: { baseUnitLocked: boolean; usedUnitIds: string[] };
+  prices: { priceListId: string; unitId: string; price: string }[];
+}
+
+export interface ProductPage {
+  items: ProductSummary[];
+  nextCursor: string | null;
+}
