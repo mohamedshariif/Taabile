@@ -11,6 +11,8 @@ import { accountingRouter } from './modules/accounting/accounting.routes.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
 import { companyRouter } from './modules/company/company.routes.js';
 import { categoriesRouter, priceListsRouter, productsRouter } from './modules/products/products.routes.js';
+import { customersRouter } from './modules/customers/customers.routes.js';
+import { suppliersRouter } from './modules/suppliers/suppliers.routes.js';
 
 export function createApp(opts: { corsOrigin?: string } = {}) {
   const app = express();
@@ -35,8 +37,12 @@ export function createApp(opts: { corsOrigin?: string } = {}) {
   
   app.use('/api/products', productsRouter);
   app.use('/api/categories', categoriesRouter);
+  
+  app.use('/api/customers', customersRouter);
+  app.use('/api/suppliers', suppliersRouter);
+  
   app.use('/api/price-lists', priceListsRouter);
-
+  
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
