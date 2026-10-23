@@ -15,6 +15,9 @@ const WORDS: Record<string, string> = {
   expenses: 'expenses',
   products: 'products',
   customers: 'customers',
+  suppliers: 'suppliers',
+  purchase_receipts: 'purchases',
+  purchase_receipt_costs: 'purchase costs',
 };
 
 const plain = (table: string) => WORDS[table] ?? table.replace(/_/g, ' ');
