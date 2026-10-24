@@ -10,6 +10,8 @@ const MENU: { to: string; label: string; permission?: string }[] = [
   { to: '/locations', label: 'Locations' },
   { to: '/users', label: 'Users', permission: 'users.manage' },
   { to: '/products', label: 'Products', permission: 'products.view' },
+  { to: '/customers', label: 'Customers', permission: 'customers.view' },
+  { to: '/suppliers', label: 'Suppliers', permission: 'suppliers.view' },
 ];
 
 // Phone: a slim top bar with a Menu button that opens the list. Wide screen (md and up): a fixed side bar.
