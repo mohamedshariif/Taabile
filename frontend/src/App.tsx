@@ -11,6 +11,9 @@ import { ProductFormPage } from './pages/ProductFormPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { UserDetailPage } from './pages/UserDetailPage';
 import { UsersPage } from './pages/UsersPage';
+import { PartiesPage } from './pages/PartiesPage';
+import { PartyDetailPage } from './pages/PartyDetailPage';
+import { PartyNewPage } from './pages/PartyNewPage';
 
 export default function App() {
   return (
@@ -29,6 +32,20 @@ export default function App() {
           </Route>
           <Route element={<RequirePermission permission="products.manage" />}>
             <Route path="products/new" element={<ProductFormPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="customers.view" />}>
+            <Route path="customers" element={<PartiesPage kind="customer" />} />
+            <Route path="customers/:id" element={<PartyDetailPage kind="customer" />} />
+          </Route>
+          <Route element={<RequirePermission permission="customers.manage" />}>
+            <Route path="customers/new" element={<PartyNewPage kind="customer" />} />
+          </Route>
+          <Route element={<RequirePermission permission="suppliers.view" />}>
+            <Route path="suppliers" element={<PartiesPage kind="supplier" />} />
+            <Route path="suppliers/:id" element={<PartyDetailPage kind="supplier" />} />
+          </Route>
+          <Route element={<RequirePermission permission="suppliers.manage" />}>
+            <Route path="suppliers/new" element={<PartyNewPage kind="supplier" />} />
           </Route>
           <Route path="locations" element={<LocationsPage />} />
           <Route element={<RequirePermission permission="users.manage" />}>
