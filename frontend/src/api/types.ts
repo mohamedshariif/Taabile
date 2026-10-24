@@ -135,3 +135,39 @@ export interface ProductPage {
   items: ProductSummary[];
   nextCursor: string | null;
 }
+
+
+// ── Customers and suppliers (F) ──
+export interface Customer {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  priceList: { id: string; name: string } | null;
+  /** null = cash only (no credit allowed) */
+  creditLimit: string | null;
+  paymentTermsDays: number;
+  status: RecordStatus;
+  /** What they owe us right now. */
+  balance: string;
+  createdAt: string;
+}
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  paymentTermsDays: number;
+  status: RecordStatus;
+  /** What we owe them right now. */
+  balance: string;
+  createdAt: string;
+}
+
+export interface PartyPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
