@@ -1,5 +1,5 @@
-import { useMe } from '../auth/AuthContext';
-import { Muted, PageTitle, SectionTitle } from '../components/ui';
+import { useMe } from '../../auth/AuthContext';
+import { Muted, PageTitle, SectionTitle } from '../../components/ui';
 
 export function HomePage() {
   const me = useMe();

@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
-import type { Customer, Supplier } from '../api/types';
-import { useAuth, useMe } from '../auth/AuthContext';
-import { Badge, Button, Card, ErrorText, Muted, PageTitle, SectionTitle } from '../components/ui';
-import { changedFields, customerBody, describeBalance, draftFrom, hasProblems, savedAsBody, supplierBody, validateParty, type PartyDraft, type PartyKind } from '../lib/parties';
-import { PartyFields } from './parties/PartyForm';
-import { KINDS } from './parties/kinds';
+import { api, errorMessage } from '../../api/client';
+import type { Customer, Supplier } from '../../api/types';
+import { useAuth, useMe } from '../../auth/AuthContext';
+import { Badge, Button, Card, ErrorText, Muted, PageTitle, SectionTitle } from '../../components/ui';
+import { changedFields, customerBody, describeBalance, draftFrom, hasProblems, savedAsBody, supplierBody, validateParty, type PartyDraft, type PartyKind } from '../../lib/parties';
+import { PartyFields } from '../../features/parties/PartyForm';
+import { KINDS } from '../../features/parties/kinds';
 
 type Party = Customer | Supplier;
 

@@ -1,12 +1,12 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, ApiError, errorMessage } from '../api/client';
-import type { Category, ProductPage, ProductSummary } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Badge, Button, DataTable, ErrorText, Field, Input, Muted, PageTitle, Select, type Column } from '../components/ui';
-import { unitsLine } from '../lib/products';
-import { CategoriesCard } from './CategoriesCard';
+import { api, ApiError, errorMessage } from '../../api/client';
+import type { Category, ProductPage, ProductSummary } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Badge, Button, DataTable, ErrorText, Field, Input, Muted, PageTitle, Select, type Column } from '../../components/ui';
+import { unitsLine } from '../../lib/products';
+import { CategoriesCard } from '../categories/CategoriesCard';
 
 type StatusFilter = 'ACTIVE' | 'INACTIVE' | 'ALL';
 

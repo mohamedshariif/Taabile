@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { api, errorMessage } from '../api/client';
-import type { Location, LocationType } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Badge, Button, Card, DataTable, ErrorText, Field, FieldRow, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../components/ui';
+import { api, errorMessage } from '../../api/client';
+import type { Location, LocationType } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Badge, Button, Card, DataTable, ErrorText, Field, FieldRow, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../../components/ui';
 
 // Everybody in the company may SEE the locations (other screens need them).
 // Only people with company.manage see the add / rename / switch-off controls.

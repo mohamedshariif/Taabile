@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, errorMessage, newIdempotencyKey } from '../api/client';
-import type { Category, ProductDetail } from '../api/types';
-import { Button, Card, Check, ErrorText, Field, FieldRow, Input, Muted, PageTitle, SectionTitle, Select } from '../components/ui';
-import { emptyDraft, emptyUnit, hasProblems, toCreateBody, trimNumber, validateDraft, type DraftUnit, type ProductDraft } from '../lib/products';
+import { api, errorMessage, newIdempotencyKey } from '../../api/client';
+import type { Category, ProductDetail } from '../../api/types';
+import { Button, Card, Check, ErrorText, Field, FieldRow, Input, Muted, PageTitle, SectionTitle, Select } from '../../components/ui';
+import { emptyDraft, emptyUnit, hasProblems, toCreateBody, trimNumber, validateDraft, type DraftUnit, type ProductDraft } from '../../lib/products';
 
 // Creating a product: what it is, its base unit (the yardstick for stock), and any package sizes.
 // Stock, costs and reports always use the base unit. A package only says "one of these = N base units".

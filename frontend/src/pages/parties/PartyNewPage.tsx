@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, errorMessage, newIdempotencyKey } from '../api/client';
-import type { Customer, Supplier } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Button, Card, ErrorText, PageTitle } from '../components/ui';
-import { customerBody, emptyParty, hasProblems, supplierBody, validateParty, type PartyDraft, type PartyKind } from '../lib/parties';
-import { PartyFields } from './parties/PartyForm';
-import { KINDS } from './parties/kinds';
+import { api, errorMessage, newIdempotencyKey } from '../../api/client';
+import type { Customer, Supplier } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Button, Card, ErrorText, PageTitle } from '../../components/ui';
+import { customerBody, emptyParty, hasProblems, supplierBody, validateParty, type PartyDraft, type PartyKind } from '../../lib/parties';
+import { PartyFields } from '../../features/parties/PartyForm';
+import { KINDS } from '../../features/parties/kinds';
 
 export function PartyNewPage({ kind }: { kind: PartyKind }) {
   const k = KINDS[kind];

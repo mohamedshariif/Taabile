@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
-import type { InvitationPreview } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../components/ui';
+import { api, ApiError } from '../../api/client';
+import type { InvitationPreview } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../../components/ui';
 
 // Opened from the link in the invitation email:  /accept-invite?token=...
 export function AcceptInvitePage() {
@@ -89,7 +89,7 @@ export function AcceptInvitePage() {
 const Title = ({ children }: { children: React.ReactNode }) => <h1 className="mb-3 text-2xl font-bold">{children}</h1>;
 
 const Box = ({ children }: { children: React.ReactNode }) => (
-  <Center>
+  <Center theme>
     <Card className="w-full max-w-sm">{children}</Card>
   </Center>
 );

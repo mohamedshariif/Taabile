@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { api, errorMessage } from '../api/client';
-import type { Category } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Muted, SectionTitle, type Column } from '../components/ui';
+import { api, errorMessage } from '../../api/client';
+import type { Category } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Muted, SectionTitle, type Column } from '../../components/ui';
 
 // A flat list of categories. Everyone who can see products sees them; people with products.manage can add,
 // rename and switch them off. Only the Admin can delete one, and only while no product uses it.

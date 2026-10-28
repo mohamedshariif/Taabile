@@ -1,12 +1,12 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
-import type { Customer, PartyPage, Supplier } from '../api/types';
-import { useAuth, useMe } from '../auth/AuthContext';
-import { Badge, Button, DataTable, ErrorText, Field, Input, Muted, PageTitle, Select, type Column } from '../components/ui';
-import { creditText, describeBalance, type PartyKind } from '../lib/parties';
-import { KINDS } from './parties/kinds';
+import { api, errorMessage } from '../../api/client';
+import type { Customer, PartyPage, Supplier } from '../../api/types';
+import { useAuth, useMe } from '../../auth/AuthContext';
+import { Badge, Button, DataTable, ErrorText, Field, Input, Muted, PageTitle, Select, type Column } from '../../components/ui';
+import { creditText, describeBalance, type PartyKind } from '../../lib/parties';
+import { KINDS } from '../../features/parties/kinds';
 
 type Party = Customer | Supplier;
 type StatusFilter = 'ACTIVE' | 'INACTIVE' | 'ALL';

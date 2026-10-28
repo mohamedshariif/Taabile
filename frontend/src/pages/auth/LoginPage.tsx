@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ApiError } from '../api/client';
-import type { CompanyChoice } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../components/ui';
+import { ApiError } from '../../api/client';
+import type { CompanyChoice } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Button, Card, Center, ErrorText, Field, Input, Muted } from '../../components/ui';
 
 export function LoginPage() {
   const { state, login } = useAuth();
@@ -33,7 +33,7 @@ export function LoginPage() {
   }
 
   return (
-    <Center>
+    <Center theme>
       <Card as="form" className="w-full max-w-sm" onSubmit={(e) => void submit(e)}>
         <h1 className="mb-3 text-2xl font-bold">Sign in to Taabile</h1>
         {choices ? (

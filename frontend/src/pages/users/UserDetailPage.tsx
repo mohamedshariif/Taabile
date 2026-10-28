@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
-import type { Location, MemberDetail, PermissionCatalog, Role } from '../api/types';
-import { useMe } from '../auth/AuthContext';
-import { Badge, Button, Card, Check, ErrorText, Muted, PageTitle, SectionTitle, Select } from '../components/ui';
+import { api, errorMessage } from '../../api/client';
+import type { Location, MemberDetail, PermissionCatalog, Role } from '../../api/types';
+import { useMe } from '../../auth/AuthContext';
+import { Badge, Button, Card, Check, ErrorText, Muted, PageTitle, SectionTitle, Select } from '../../components/ui';
 
 const ROLES: Role[] = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
 const ROLE_LABEL: Record<Role, string> = { ADMIN: 'Admin', MANAGER: 'Manager', STAFF: 'Staff', VIEWER: 'Viewer' };

@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
-import type { ProductDetail } from '../api/types';
-import { useAuth } from '../auth/AuthContext';
-import { Badge, Button, Card, ErrorText, Muted, PageTitle, SectionTitle } from '../components/ui';
-import { DetailsSection } from './product/DetailsSection';
-import { PricesSection } from './product/PricesSection';
-import { UnitsSection } from './product/UnitsSection';
-import { useProductCache } from './product/useProductCache';
+import { api, errorMessage } from '../../api/client';
+import type { ProductDetail } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import { Badge, Button, Card, ErrorText, Muted, PageTitle, SectionTitle } from '../../components/ui';
+import { DetailsSection } from '../../features/product/DetailsSection';
+import { PricesSection } from '../../features/product/PricesSection';
+import { UnitsSection } from '../../features/product/UnitsSection';
+import { useProductCache } from '../../features/product/useProductCache';
 
 export function ProductDetailPage() {
   const { productId = '' } = useParams();

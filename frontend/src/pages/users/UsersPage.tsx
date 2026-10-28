@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
-import type { Invitation, InvitationResult, Location, Member, Role } from '../api/types';
-import { useMe } from '../auth/AuthContext';
-import { Badge, Button, Card, Check, DataTable, ErrorText, Field, FieldRow, Group, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../components/ui';
+import { api, errorMessage } from '../../api/client';
+import type { Invitation, InvitationResult, Location, Member, Role } from '../../api/types';
+import { useMe } from '../../auth/AuthContext';
+import { Badge, Button, Card, Check, DataTable, ErrorText, Field, FieldRow, Group, Input, Muted, PageTitle, SectionTitle, Select, type Column } from '../../components/ui';
 
 const ROLE_LABEL: Record<Role, string> = { ADMIN: 'Admin', MANAGER: 'Manager', STAFF: 'Staff', VIEWER: 'Viewer' };
 const needsLocations = (r: Role) => r === 'MANAGER' || r === 'STAFF';
