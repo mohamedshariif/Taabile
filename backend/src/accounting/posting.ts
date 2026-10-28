@@ -313,3 +313,11 @@ export function openingBalances(p: {
   if (diff.lt(0)) lines.push(dr(key('OPENING_EQUITY'), diff.abs()));
   return draft('OPENING_BALANCES', 'Opening balances', lines);
 }
+
+/** Stock counted in when the system starts. Inventory goes up; the other side is opening balance equity. */
+export function openingStock(p: { locationId: string; cost: Numeric }): JournalDraft {
+  return draft('OPENING_STOCK', 'Opening stock', [
+    dr(key('INVENTORY'), p.cost, { locationId: p.locationId }),
+    cr(key('OPENING_EQUITY'), p.cost),
+  ]);
+}
