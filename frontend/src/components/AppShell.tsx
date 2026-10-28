@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth, useMe } from '../auth/AuthContext';
+import { ThemeSwitch } from './ThemeSwitch';
 import { Button, cx } from './ui';
 
 // The menu is built from what the SERVER says this person may do (GET /api/auth/me).
@@ -10,6 +11,10 @@ const MENU: { to: string; label: string; permission?: string }[] = [
   { to: '/locations', label: 'Locations' },
   { to: '/users', label: 'Users', permission: 'users.manage' },
   { to: '/products', label: 'Products', permission: 'products.view' },
+  { to: '/stock', label: 'Stock', permission: 'stock.view' },
+  { to: '/transfers', label: 'Transfers', permission: 'stock.view' },
+  { to: '/counts', label: 'Stock counts', permission: 'stock.view' },
+  { to: '/purchases', label: 'Purchases', permission: 'purchases.view' },
   { to: '/customers', label: 'Customers', permission: 'customers.view' },
   { to: '/suppliers', label: 'Suppliers', permission: 'suppliers.view' },
 ];
@@ -43,7 +48,9 @@ export function AppShell() {
           <div className="text-xl font-bold text-brand">Taabile</div>
           <div className="mb-4 text-sm text-muted">{me.company.name}</div>
         </div>
-        <nav className="flex flex-col gap-1" aria-label="Main">
+        <nav 
+          className="flex flex-col gap-1 md:min-h-0 md:flex-1 md:overflow-y-auto" 
+          aria-label="Main">
           {MENU.filter((m) => !m.permission || can(m.permission)).map((m) => (
             <NavLink
               key={m.to}
@@ -61,7 +68,8 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-4 md:mt-auto">
+        <div className="mt-4 md:mt-2 md:shrink-0 md:border-t md:border-line md:pt-3">
+          <div className="mb-3"><ThemeSwitch /></div>
           <div className="text-sm">
             {me.user.name}
             <div className="text-muted">{me.role}</div>

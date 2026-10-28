@@ -2,18 +2,31 @@ import { Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { RequireAuth, RequirePermission } from './components/RequireAuth';
 import { Center, Muted } from './components/ui';
-import { AcceptInvitePage } from './pages/AcceptInvitePage';
-import { HomePage } from './pages/HomePage';
-import { LocationsPage } from './pages/LocationsPage';
-import { LoginPage } from './pages/LoginPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { ProductFormPage } from './pages/ProductFormPage';
-import { ProductsPage } from './pages/ProductsPage';
-import { UserDetailPage } from './pages/UserDetailPage';
-import { UsersPage } from './pages/UsersPage';
-import { PartiesPage } from './pages/PartiesPage';
-import { PartyDetailPage } from './pages/PartyDetailPage';
-import { PartyNewPage } from './pages/PartyNewPage';
+import { AcceptInvitePage } from './pages/auth/AcceptInvitePage';
+import { HomePage } from './pages/home/HomePage';
+import { LocationsPage } from './pages/locations/LocationsPage';
+import { LoginPage } from './pages/auth/LoginPage';
+import { ProductDetailPage } from './pages/products/ProductDetailPage';
+import { ProductFormPage } from './pages/products/ProductFormPage';
+import { ProductsPage } from './pages/products/ProductsPage';
+import { UserDetailPage } from './pages/users/UserDetailPage';
+import { UsersPage } from './pages/users/UsersPage';
+import { PartiesPage } from './pages/parties/PartiesPage';
+import { PartyDetailPage } from './pages/parties/PartyDetailPage';
+import { PartyNewPage } from './pages/parties/PartyNewPage';
+import { MovementsPage } from './pages/movements/MovementsPage';
+import { OpeningStockPage } from './pages/stock/OpeningStockPage';
+import { PurchaseDetailPage } from './pages/purchases/PurchaseDetailPage';
+import { PurchaseNewPage } from './pages/purchases/PurchaseNewPage';
+import { PurchasesPage } from './pages/purchases/PurchasesPage';
+import { StockAdjustPage } from './pages/stock/StockAdjustPage';
+import { StockPage } from './pages/stock/StockPage';
+import { CountDetailPage } from './pages/counts/CountDetailPage';
+import { CountNewPage } from './pages/counts/CountNewPage';
+import { CountsPage } from './pages/counts/CountsPage';
+import { TransferDetailPage } from './pages/transfers/TransferDetailPage';
+import { TransferNewPage } from './pages/transfers/TransferNewPage';
+import { TransfersPage } from './pages/transfers/TransfersPage';
 
 export default function App() {
   return (
@@ -46,6 +59,35 @@ export default function App() {
           </Route>
           <Route element={<RequirePermission permission="suppliers.manage" />}>
             <Route path="suppliers/new" element={<PartyNewPage kind="supplier" />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.view" />}>
+            <Route path="stock" element={<StockPage />} />
+            <Route path="stock/movements" element={<MovementsPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.view" />}>
+            <Route path="transfers" element={<TransfersPage />} />
+            <Route path="transfers/:id" element={<TransferDetailPage />} />
+            <Route path="counts" element={<CountsPage />} />
+            <Route path="counts/:id" element={<CountDetailPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.transfer" />}>
+            <Route path="transfers/new" element={<TransferNewPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.count" />}>
+            <Route path="counts/new" element={<CountNewPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.adjust_approve" />}>
+            <Route path="stock/adjust" element={<StockAdjustPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="import.run" />}>
+            <Route path="stock/opening" element={<OpeningStockPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="purchases.view" />}>
+            <Route path="purchases" element={<PurchasesPage />} />
+            <Route path="purchases/:id" element={<PurchaseDetailPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="purchases.manage" />}>
+            <Route path="purchases/new" element={<PurchaseNewPage />} />
           </Route>
           <Route path="locations" element={<LocationsPage />} />
           <Route element={<RequirePermission permission="users.manage" />}>

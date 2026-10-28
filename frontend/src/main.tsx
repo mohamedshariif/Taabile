@@ -5,6 +5,10 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './auth/AuthContext';
 import './index.css';
+import { applyTheme, readTheme } from './lib/theme';
+
+// Apply the saved Light/Dark choice before anything is drawn.
+applyTheme(readTheme());
 
 // TanStack Query fetches and caches server data for us (loading, errors, refresh after changes).
 const queryClient = new QueryClient({
