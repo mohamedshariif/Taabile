@@ -2,10 +2,11 @@
 
 /* ── Colours ──────────────────────────────────────────────────────────────
    The real values live here as CSS variables (light and dark). The @theme block below turns them
-   into Tailwind colour names, so screens write  bg-card  text-muted  border-line  and dark mode
-   follows the phone or computer setting with no extra classes. Change a colour here, once. */
+   into Tailwind colour names, so screens write  bg-card  text-muted  border-line  and both themes work
+   with no extra classes. The person picks Light, Dark or Same as my device (see lib/theme.ts); the
+   choice is the data-theme attribute on <html>. Change a colour here, once, in both dark blocks. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f6f7f9;
   --card: #fff;
   --ink: #1b2430;
@@ -16,8 +17,10 @@
   --danger: #b42318;
   --warn: #b54708;
 }
+/* "Same as my device" (no data-theme set): follow the phone or computer. A chosen theme overrides it. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
     --bg: #12161c;
     --card: #1b2129;
     --ink: #e8ecf1;
@@ -28,6 +31,18 @@
     --danger: #f97066;
     --warn: #f79009;
   }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #12161c;
+  --card: #1b2129;
+  --ink: #e8ecf1;
+  --muted: #9aa5b4;
+  --line: #2c3541;
+  --brand: #2dd4bf;
+  --on-brand: #04211e;
+  --danger: #f97066;
+  --warn: #f79009;
 }
 
 @theme inline {
