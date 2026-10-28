@@ -1,4 +1,5 @@
 import { createElement, type ButtonHTMLAttributes, type FormEventHandler, type HTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { ThemeSwitch } from './ThemeSwitch';
 
 // Small building blocks used by every screen. Screens say WHAT they show (Button, Field, DataTable...);
 // the look (Tailwind classes) lives only here, so changing it later is a one-file job.
@@ -105,7 +106,12 @@ export const Group = ({ legend, children }: { legend: string; children: ReactNod
 /** Fields that sit side by side on a wide screen and stack on a phone. */
 export const FieldRow = ({ children }: { children: ReactNode }) => <div className="my-3 grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">{children}</div>;
 /** A page centred on the screen (sign-in, invitation). */
-export const Center = ({ children }: { children: ReactNode }) => <div className="grid min-h-screen place-items-center p-4">{children}</div>;
+export const Center = ({ children, theme }: { children: ReactNode; theme?: boolean }) => (
+  <div className="relative grid min-h-screen place-items-center p-4">
+    {theme && <div className="absolute top-3 right-3"><ThemeSwitch /></div>}
+    {children}
+  </div>
+);
 
 // ── Small status label ──
 const TONE = {
