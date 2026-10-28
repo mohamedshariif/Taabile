@@ -171,3 +171,106 @@ export interface PartyPage<T> {
   items: T[];
   nextCursor: string | null;
 }
+
+// ── Stock and purchasing (G, H) ──
+export type MovementType = 'OPENING' | 'RECEIPT' | 'TRANSFER_OUT' | 'TRANSFER_IN' | 'SALE_RELEASE' | 'RETURN_IN' | 'RETURN_OUT' | 'ADJUSTMENT' | 'DAMAGE' | 'REVERSAL';
+
+export interface StockItem {
+  id: string;
+  location: { id: string; name: string; code: string };
+  product: { id: string; sku: string; name: string; baseUnit: string; allowFractions: boolean; category: { id: string; name: string } | null };
+  onHand: string;
+  committed: string;
+  available: string;
+  /** For example [{ name: 'Sack 50 kg', quantity: '2' }] */
+  packages: { name: string; quantity: string }[];
+  /** null when this person may not see costs */
+  avgCost: string | null;
+  value: string | null;
+}
+
+export interface StockMovement {
+  id: string;
+  seq: string;
+  occurredAt: string;
+  location: { id: string; name: string };
+  product: { id: string; sku: string; name: string; baseUnit: string };
+  type: MovementType;
+  quantity: string;
+  unitCost: string | null;
+  totalCost: string | null;
+  refType: string;
+  refId: string | null;
+  reason: string | null;
+  reversalOfId: string | null;
+  reversed: boolean;
+}
+
+export interface ReceiptSummary {
+  id: string;
+  number: string;
+  status: 'POSTED' | 'VOIDED';
+  supplier: { id: string; code: string; name: string };
+  location: { id: string; name: string; code: string };
+  receivedAt: string;
+  supplierInvoiceRef: string | null;
+  containerRef: string | null;
+  goodsTotal: string;
+  costTotal: string;
+  total: string;
+  paidTotal: string;
+}
+
+export interface Receipt extends Omit<ReceiptSummary, 'supplierInvoiceRef' | 'containerRef'> {
+  supplierInvoiceRef: string | null;
+  containerRef: string | null;
+  invoiceDate: string | null;
+  dueDate: string | null;
+  note: string | null;
+  lines: {
+    id: string;
+    product: { id: string; sku: string; name: string; baseUnit: string };
+    unit: { id: string; name: string };
+    qtyExpected: string;
+    qtyReceived: string;
+    qtyDamaged: string;
+    qtyReceivedBase: string;
+    unitPrice: string;
+    lineTotal: string;
+    landedUnitCostBase: string;
+  }[];
+  costs: { id: string; type: 'FREIGHT' | 'HANDLING' | 'CONTAINER' | 'OTHER'; amount: string; note: string | null }[];
+}
+
+
+// ── Transfers and counts (I) ──
+export type TransferStatus = 'REQUESTED' | 'APPROVED' | 'IN_TRANSIT' | 'RECEIVED' | 'DISCREPANCY' | 'CLOSED' | 'REJECTED' | 'CANCELLED';
+export interface TransferSummary {
+  id: string;
+  number: string;
+  status: TransferStatus;
+  from: { id: string; name: string; code: string };
+  to: { id: string; name: string; code: string };
+  requestedAt: string;
+  products: number;
+}
+export interface Transfer extends Omit<TransferSummary, 'products'> {
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  note: string | null;
+  lines: { id: string; product: { id: string; sku: string; name: string; baseUnit: string }; qtyRequested: string; qtyDispatched: string; qtyReceived: string; discrepancyNote: string | null }[];
+}
+export interface CountSummary {
+  id: string;
+  number: string;
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  location: { id: string; name: string; code: string };
+  countedAt: string;
+  products: number;
+}
+export interface StockCount extends Omit<CountSummary, 'products'> {
+  countedById: string;
+  approvedAt: string | null;
+  note: string | null;
+  lines: { id: string; product: { id: string; sku: string; name: string; baseUnit: string }; expectedQty: string; countedQty: string; difference: string; reason: string | null }[];
+}
