@@ -212,3 +212,134 @@ END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS products_guard ON products;
 CREATE TRIGGER products_guard BEFORE UPDATE ON products
   FOR EACH ROW EXECUTE FUNCTION guard_product();
+
+-- ───────── 7. Stock rules (Step G) ─────────
+-- A cost is never negative.
+ALTER TABLE stock_balances DROP CONSTRAINT IF EXISTS stock_balances_cost_valid;
+ALTER TABLE stock_balances ADD CONSTRAINT stock_balances_cost_valid CHECK ("avgCost" >= 0);
+
+-- A movement's direction must match its type: arrivals add stock, issues remove it, and its value has the same sign.
+ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS stock_movements_direction;
+ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_direction CHECK (
+  quantity <> 0 AND "unitCost" >= 0 AND (
+    (type IN ('OPENING', 'RECEIPT', 'TRANSFER_IN', 'RETURN_IN') AND quantity > 0 AND "totalCost" >= 0) OR
+    (type IN ('TRANSFER_OUT', 'SALE_RELEASE', 'RETURN_OUT', 'DAMAGE') AND quantity < 0 AND "totalCost" <= 0) OR
+    (type IN ('ADJUSTMENT', 'REVERSAL') AND ((quantity > 0 AND "totalCost" >= 0) OR (quantity < 0 AND "totalCost" <= 0)))
+  ));
+
+-- A movement must use a location and product of its own company, and a reversal must be the exact mirror of the movement it reverses.
+CREATE OR REPLACE FUNCTION stock_movement_guard() RETURNS trigger AS $$
+DECLARE orig stock_movements%ROWTYPE;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A stock movement must use a location of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM products WHERE id = NEW."productId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A stock movement must use a product of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."reversalOfId" IS NOT NULL THEN
+    SELECT * INTO orig FROM stock_movements WHERE id = NEW."reversalOfId";
+    IF NEW.type <> 'REVERSAL' OR orig.id IS NULL OR orig.type = 'REVERSAL'
+       OR orig."companyId" <> NEW."companyId" OR orig."locationId" <> NEW."locationId" OR orig."productId" <> NEW."productId"
+       OR orig.quantity <> -NEW.quantity THEN
+      RAISE EXCEPTION 'A reversal must be the exact opposite of the movement it reverses' USING ERRCODE = '23514';
+    END IF;
+  ELSIF NEW.type = 'REVERSAL' THEN
+    RAISE EXCEPTION 'A reversal must say which movement it reverses' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS stock_movements_guard ON stock_movements;
+CREATE TRIGGER stock_movements_guard BEFORE INSERT ON stock_movements FOR EACH ROW EXECUTE FUNCTION stock_movement_guard();
+
+-- Stock on hand must always equal the sum of its movements (checked at commit), whoever changed which table.
+CREATE OR REPLACE FUNCTION assert_stock_matches_movements() RETURNS trigger AS $$
+DECLARE moved numeric; held numeric;
+BEGIN
+  SELECT COALESCE(sum(quantity), 0) INTO moved FROM stock_movements
+    WHERE "companyId" = NEW."companyId" AND "locationId" = NEW."locationId" AND "productId" = NEW."productId";
+  SELECT COALESCE(sum("onHand"), 0) INTO held FROM stock_balances
+    WHERE "locationId" = NEW."locationId" AND "productId" = NEW."productId";
+  IF moved <> held THEN
+    RAISE EXCEPTION 'Stock on hand (%) does not match its movement history (%)', held, moved USING ERRCODE = '23514';
+  END IF;
+  RETURN NULL;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS stock_movements_match ON stock_movements;
+CREATE CONSTRAINT TRIGGER stock_movements_match AFTER INSERT ON stock_movements
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION assert_stock_matches_movements();
+DROP TRIGGER IF EXISTS stock_balances_match ON stock_balances;
+CREATE CONSTRAINT TRIGGER stock_balances_match AFTER INSERT OR UPDATE OF "onHand" ON stock_balances
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION assert_stock_matches_movements();
+
+
+-- ───────── 8. Purchase receipt rules (Step H) ─────────
+ALTER TABLE purchase_receipt_lines DROP CONSTRAINT IF EXISTS purchase_receipt_lines_valid;
+ALTER TABLE purchase_receipt_lines ADD CONSTRAINT purchase_receipt_lines_valid CHECK (
+  "qtyReceived" > 0 AND "qtyReceivedBase" > 0 AND "qtyDamaged" >= 0 AND "qtyExpected" >= 0
+  AND "unitCost" >= 0 AND "landedUnitCostBase" >= 0 AND "lineTotal" >= 0);
+ALTER TABLE purchase_costs DROP CONSTRAINT IF EXISTS purchase_costs_valid;
+ALTER TABLE purchase_costs ADD CONSTRAINT purchase_costs_valid CHECK (amount > 0);
+ALTER TABLE purchase_receipts DROP CONSTRAINT IF EXISTS purchase_receipts_valid;
+ALTER TABLE purchase_receipts ADD CONSTRAINT purchase_receipts_valid CHECK (
+  "goodsTotal" >= 0 AND "costTotal" >= 0 AND total >= 0 AND "paidTotal" >= 0 AND "paidTotal" <= total);
+
+-- A receipt must use a supplier and a location of its own company.
+CREATE OR REPLACE FUNCTION purchase_receipt_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM suppliers WHERE id = NEW."supplierId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A purchase receipt must use a supplier of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A purchase receipt must use a location of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS purchase_receipts_guard ON purchase_receipts;
+CREATE TRIGGER purchase_receipts_guard BEFORE INSERT OR UPDATE OF "supplierId", "locationId" ON purchase_receipts
+  FOR EACH ROW EXECUTE FUNCTION purchase_receipt_guard();
+
+
+-- ───────── 9. Transfer and stock count rules (Step I) ─────────
+-- A count line is internally consistent: nothing negative, and the difference is exactly counted minus expected.
+ALTER TABLE stock_count_lines DROP CONSTRAINT IF EXISTS stock_count_lines_valid;
+ALTER TABLE stock_count_lines ADD CONSTRAINT stock_count_lines_valid CHECK (
+  "expectedQty" >= 0 AND "countedQty" >= 0 AND difference = "countedQty" - "expectedQty");
+
+-- Transfers and counts only ever use places and products of their own company.
+CREATE OR REPLACE FUNCTION transfer_guard() RETURNS trigger AS $$
+BEGIN
+  IF (SELECT count(*) FROM locations WHERE "companyId" = NEW."companyId" AND id IN (NEW."fromLocationId", NEW."toLocationId")) <> 2 THEN
+    RAISE EXCEPTION 'A transfer must use two places of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS transfers_guard ON transfers;
+CREATE TRIGGER transfers_guard BEFORE INSERT OR UPDATE OF "fromLocationId", "toLocationId" ON transfers
+  FOR EACH ROW EXECUTE FUNCTION transfer_guard();
+
+CREATE OR REPLACE FUNCTION stock_count_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A stock count must use a place of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS stock_counts_guard ON stock_counts;
+CREATE TRIGGER stock_counts_guard BEFORE INSERT OR UPDATE OF "locationId" ON stock_counts
+  FOR EACH ROW EXECUTE FUNCTION stock_count_guard();
+
+-- Lines must use a product of their own company.
+CREATE OR REPLACE FUNCTION document_line_product_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM products WHERE id = NEW."productId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A document line must use a product of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS transfer_lines_product_guard ON transfer_lines;
+CREATE TRIGGER transfer_lines_product_guard BEFORE INSERT ON transfer_lines
+  FOR EACH ROW EXECUTE FUNCTION document_line_product_guard();
+DROP TRIGGER IF EXISTS stock_count_lines_product_guard ON stock_count_lines;
+CREATE TRIGGER stock_count_lines_product_guard BEFORE INSERT ON stock_count_lines
+  FOR EACH ROW EXECUTE FUNCTION document_line_product_guard();

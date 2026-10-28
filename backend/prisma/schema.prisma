@@ -49,33 +49,23 @@ enum MovementType {
   TRANSFER_OUT
   TRANSFER_IN
   SALE_RELEASE
-  CUSTOMER_RETURN
-  SUPPLIER_RETURN
+  RETURN_IN
+  RETURN_OUT
   ADJUSTMENT
   DAMAGE
-  //REVERSAL
+  REVERSAL
 }
 
 enum TransferStatus {
   REQUESTED
   APPROVED
-  DISPATCHED
+  REJECTED
+  IN_TRANSIT
   RECEIVED
+  DISCREPANCY
+  CLOSED
   CANCELLED
 }
-
-/**
- * enum TransferStatus {
- * REQUESTED
- * APPROVED
- * REJECTED
- * IN_TRANSIT
- * RECEIVED
- * DISCREPANCY
- * CLOSED
- * CANCELLED
- * }
- */
 
 enum CountStatus {
   OPEN
@@ -550,6 +540,7 @@ model StockBalance {
 
 model StockMovement {
   id           String         @id @default(uuid()) @db.Uuid
+  seq          BigInt         @unique @default(autoincrement())
   companyId    String         @db.Uuid
   company      Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   locationId   String         @db.Uuid
@@ -559,6 +550,8 @@ model StockMovement {
   type         MovementType
   quantity     Decimal        @db.Decimal(18, 4)
   unitCost     Decimal        @default(0) @db.Decimal(19, 6)
+  /// The average cost per base unit just BEFORE this movement. Reversing a movement puts exactly this back (no rounding drift).
+  avgCostBefore Decimal? @db.Decimal(19, 6)
   totalCost    Decimal        @default(0) @db.Decimal(19, 4)
   refType      String
   refId        String?        @db.Uuid

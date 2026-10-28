@@ -40,6 +40,18 @@ async function seedCompany(name: string, year = 2026, month = 10): Promise<Co> {
     `INSERT INTO products ("companyId", sku, name, "baseUnit", "updatedAt") VALUES ($1, 'RICE', 'Rice', 'kg', now()) RETURNING id`, [c.id]);
   return { companyId: c.id, periodId: p.id, cash: cash.id, sales: sales.id, locationId: loc.id, productId: prod.id };
 }
+/** Stock arrives the way the engine does it: a movement AND the matching balance, together (the database refuses either alone). */
+async function stockIn(co: Co, productId: string, qty: number, locationId = co.locationId, type = 'RECEIPT') {
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
+       VALUES ($1, $2, $3, $4, $5, 'TEST', $6)`, [co.companyId, locationId, productId, type, qty, uid()]);
+    await tx.query(
+      `INSERT INTO stock_balances ("companyId", "locationId", "productId", "onHand", "updatedAt") VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT ("locationId", "productId") DO UPDATE SET "onHand" = stock_balances."onHand" + EXCLUDED."onHand"`,
+      [co.companyId, locationId, productId, qty]);
+  });
+}
 
 type Tx = { query: PGlite['query'] };
 async function entry(tx: Tx, co: Co, lines: [string, number, number][], date = '2026-10-13') {
@@ -153,16 +165,15 @@ describe('stock', () => {
   });
 
   it('accepts on hand with part committed, and blocks overselling the last units', async () => {
-    await balance(A, 20, 5);
+    await stockIn(A, A.productId, 20);
+    await db.query(`UPDATE stock_balances SET committed = 5 WHERE "companyId" = $1`, [A.companyId]);
     await expect(
       db.query(`UPDATE stock_balances SET committed = 21 WHERE "companyId" = $1`, [A.companyId]),
     ).rejects.toThrow();
   });
 
   it('stock movements are append-only', async () => {
-    await db.query(
-      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
-       VALUES ($1, $2, $3, 'RECEIPT', 20, 'TEST', $4)`, [A.companyId, A.locationId, A.productId, uid()]);
+    await stockIn(A, A.productId, 20);
     await expect(db.query(`UPDATE stock_movements SET quantity = 1`)).rejects.toThrow(/append-only/);
     await expect(db.query(`DELETE FROM stock_movements`)).rejects.toThrow(/append-only/);
   });
@@ -306,9 +317,7 @@ describe('products and units', () => {
   it('once a product has stock movements its base unit and whole-number rule are frozen', async () => {
     const p = await product(A, 'U8');
     await db.query(`UPDATE products SET "baseUnit" = 'litre', "allowFractions" = true WHERE id = $1`, [p]); // no history yet: fine
-    await db.query(
-      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
-       VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`, [A.companyId, A.locationId, p, uid()]);
+    await stockIn(A, p, 5);
     await expect(db.query(`UPDATE products SET "baseUnit" = 'kg' WHERE id = $1`, [p])).rejects.toThrow(/stock history/);
     await expect(db.query(`UPDATE products SET "allowFractions" = false WHERE id = $1`, [p])).rejects.toThrow(/stock history/);
     await db.query(`UPDATE products SET name = 'Renamed', status = 'INACTIVE' WHERE id = $1`, [p]); // other fields stay editable
@@ -316,9 +325,7 @@ describe('products and units', () => {
 
   it('allowing fractions later is harmless and stays possible', async () => {
     const p = await product(A, 'U9');
-    await db.query(
-      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById")
-       VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`, [A.companyId, A.locationId, p, uid()]);
+    await stockIn(A, p, 5);
     await db.query(`UPDATE products SET "allowFractions" = true WHERE id = $1`, [p]);
   });
 });
@@ -350,9 +357,97 @@ describe('delete protection', () => {
 
   it('a product that has stock movements cannot be deleted', async () => {
     const p = await one<{ id: string }>(`INSERT INTO products ("companyId", sku, name, "baseUnit", "updatedAt") VALUES ($1, $2, 'Flour', 'kg', now()) RETURNING id`, [A.companyId, `DP${next()}`]);
-    await db.query(
-      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "refType", "createdById") VALUES ($1, $2, $3, 'RECEIPT', 5, 'TEST', $4)`,
-      [A.companyId, A.locationId, p.id, uid()]);
+    await stockIn(A, p.id, 5);
     await expect(db.query(`DELETE FROM products WHERE id = $1`, [p.id])).rejects.toThrow(/foreign key|violates/i);
+  });
+});
+
+
+describe('stock rules (Step G)', () => {
+  const move = (tx: Tx, co: Co, p: string, type: string, qty: number, over: { loc?: string; cost?: number; total?: number; reversalOf?: string } = {}) =>
+    tx.query<{ id: string }>(
+      `INSERT INTO stock_movements ("companyId", "locationId", "productId", type, quantity, "unitCost", "totalCost", "refType", "reversalOfId", "createdById")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'TEST', $8, $9) RETURNING id`,
+      [co.companyId, over.loc ?? co.locationId, p, type, qty, over.cost ?? 0, over.total ?? 0, over.reversalOf ?? null, uid()]);
+  const holds = (tx: Tx, co: Co, p: string, onHand: number) =>
+    tx.query(
+      `INSERT INTO stock_balances ("companyId", "locationId", "productId", "onHand", "updatedAt") VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT ("locationId", "productId") DO UPDATE SET "onHand" = EXCLUDED."onHand"`, [co.companyId, co.locationId, p, onHand]);
+  const fresh = (name: string) => one<{ id: string }>(`INSERT INTO products ("companyId", sku, name, "baseUnit", "updatedAt") VALUES ($1, $2, $3, 'kg', now()) RETURNING id`, [A.companyId, `SR${next()}`, name]);
+
+  it('a movement must point the right way for its type, and cannot be zero', async () => {
+    const p = (await fresh('Dir')).id;
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', -5); await holds(tx, A, p, -5); })).rejects.toThrow();
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'SALE_RELEASE', 5); await holds(tx, A, p, 5); })).rejects.toThrow(/stock_movements_direction/);
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 0); })).rejects.toThrow(/stock_movements_direction/);
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'ADJUSTMENT', 3, { total: -1 }); await holds(tx, A, p, 3); })).rejects.toThrow(/stock_movements_direction/);
+    await db.transaction(async (tx) => { await move(tx, A, p, 'ADJUSTMENT', 3, { cost: 2, total: 6 }); await holds(tx, A, p, 3); });
+  });
+
+  it('stock on hand must equal the sum of its movements, whichever side is changed alone', async () => {
+    const p = (await fresh('Match')).id;
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 10); })).rejects.toThrow(/does not match/); // movement without balance
+    await expect(db.transaction(async (tx) => { await holds(tx, A, p, 10); })).rejects.toThrow(/does not match/); // balance without movement
+    await db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 10); await holds(tx, A, p, 10); });
+    await expect(db.query(`UPDATE stock_balances SET "onHand" = 11 WHERE "productId" = $1`, [p])).rejects.toThrow(/does not match/); // quiet edit
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'SALE_RELEASE', -3); await holds(tx, A, p, 8); })).rejects.toThrow(/does not match/); // wrong maths
+    await db.transaction(async (tx) => { await move(tx, A, p, 'SALE_RELEASE', -3); await holds(tx, A, p, 7); });
+  });
+
+  it('cannot move below zero even when the maths is "consistent"', async () => {
+    const p = (await fresh('Neg')).id;
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'ADJUSTMENT', -2); await holds(tx, A, p, -2); })).rejects.toThrow(/stock_balances_valid/);
+  });
+
+  it('a movement must use a location and a product of its own company', async () => {
+    const p = (await fresh('Own')).id;
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 1, { loc: B.locationId }); })).rejects.toThrow(/location of its own company/);
+    await expect(db.transaction(async (tx) => { await move(tx, A, B.productId, 'RECEIPT', 1); })).rejects.toThrow(/product of its own company/);
+  });
+
+  it('a reversal must be the exact opposite of the movement it reverses', async () => {
+    const p = (await fresh('Rev')).id;
+    const id = await db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 10, { cost: 1, total: 10 }); await holds(tx, A, p, 10); const r = await tx.query<{ id: string }>(`SELECT id FROM stock_movements WHERE "productId" = $1`, [p]); return r.rows[0]!.id; });
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'REVERSAL', -4, { cost: 1, total: -4, reversalOf: id }); await holds(tx, A, p, 6); })).rejects.toThrow(/exact opposite/);
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'REVERSAL', -10, { cost: 1, total: -10 }); await holds(tx, A, p, 0); })).rejects.toThrow(/must say which movement/);
+    await expect(db.transaction(async (tx) => { await move(tx, A, p, 'ADJUSTMENT', -10, { reversalOf: id }); await holds(tx, A, p, 0); })).rejects.toThrow(/exact opposite/);
+    await db.transaction(async (tx) => { await move(tx, A, p, 'REVERSAL', -10, { cost: 1, total: -10, reversalOf: id }); await holds(tx, A, p, 0); });
+  });
+
+  it('movements get a strictly increasing order number', async () => {
+    const p = (await fresh('Seq')).id;
+    await db.transaction(async (tx) => { await move(tx, A, p, 'RECEIPT', 1); await move(tx, A, p, 'RECEIPT', 1); await holds(tx, A, p, 2); });
+    const r = await db.query<{ seq: string }>(`SELECT seq::text FROM stock_movements WHERE "productId" = $1 ORDER BY seq`, [p]);
+    expect(Number(r.rows[1]!.seq)).toBeGreaterThan(Number(r.rows[0]!.seq));
+  });
+});
+
+
+describe('transfer and count rules (Step I)', () => {
+  const newLocation = (co: Co) => one<{ id: string }>(`INSERT INTO locations ("companyId", name, code, type) VALUES ($1, $2, $3, 'STORE') RETURNING id`, [co.companyId, `L${next()}`, `L${next()}`]);
+
+  it('a transfer needs two different places of its own company', async () => {
+    const second = await newLocation(A);
+    const ins = (from: string, to: string) =>
+      db.query(`INSERT INTO transfers ("companyId", number, "fromLocationId", "toLocationId", "requestedById") VALUES ($1, $2, $3, $4, $5)`, [A.companyId, `T${next()}`, from, to, uid()]);
+    await expect(ins(A.locationId, A.locationId)).rejects.toThrow(/two places of its own company|transfers_distinct_locations/);
+    await expect(ins(A.locationId, B.locationId)).rejects.toThrow(/two places of its own company/);
+    await ins(A.locationId, second.id);
+  });
+
+  it('a count line is consistent: no negatives, and difference is exactly counted minus expected', async () => {
+    const c = await one<{ id: string }>(`INSERT INTO stock_counts ("companyId", number, "locationId", "countedAt", "countedById") VALUES ($1, $2, $3, now(), $4) RETURNING id`, [A.companyId, `C${next()}`, A.locationId, uid()]);
+    const line = (expected: number, counted: number, diff: number, product = A.productId) =>
+      db.query(`INSERT INTO stock_count_lines ("companyId", "countId", "productId", "expectedQty", "countedQty", difference) VALUES ($1, $2, $3, $4, $5, $6)`, [A.companyId, c.id, product, expected, counted, diff]);
+    await expect(line(10, 8, -1)).rejects.toThrow(/stock_count_lines_valid/);
+    await expect(line(10, -1, -11)).rejects.toThrow(/stock_count_lines_valid/);
+    await expect(line(10, 8, -2, B.productId)).rejects.toThrow(/product of its own company/);
+    await line(10, 8, -2);
+  });
+
+  it('a count must use a place of its own company', async () => {
+    await expect(
+      db.query(`INSERT INTO stock_counts ("companyId", number, "locationId", "countedAt", "countedById") VALUES ($1, $2, $3, now(), $4)`, [A.companyId, `C${next()}`, B.locationId, uid()]),
+    ).rejects.toThrow(/place of its own company/);
   });
 });
