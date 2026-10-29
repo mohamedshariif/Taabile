@@ -274,3 +274,127 @@ export interface StockCount extends Omit<CountSummary, 'products'> {
   note: string | null;
   lines: { id: string; product: { id: string; sku: string; name: string; baseUnit: string }; expectedQty: string; countedQty: string; difference: string; reason: string | null }[];
 }
+
+// ── Money accounts (K1) ──
+export interface MoneyAccount {
+  id: string;
+  name: string;
+  type: 'CASH' | 'BANK';
+  location: { id: string; name: string } | null;
+  status: RecordStatus;
+  ledgerCode: string;
+  balance: string;
+}
+
+// ── Sales (K2) ──
+export type FulfillmentStatus = 'PENDING' | 'PARTIAL' | 'COMPLETE';
+export type PaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+export interface SaleSummary {
+  id: string;
+  number: string;
+  status: 'POSTED' | 'VOIDED';
+  type: 'RETAIL' | 'WHOLESALE';
+  paymentStatus: PaymentStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  location: { id: string; name: string; code: string };
+  customer: { id: string; code: string; name: string } | null;
+  soldAt: string;
+  total: string;
+  paidTotal: string;
+}
+export interface Sale extends SaleSummary {
+  dueDate: string | null;
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  owed: string;
+  createdById: string;
+  note: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  lines: {
+    id: string;
+    product: { id: string; sku: string; name: string; baseUnit: string };
+    unit: { id: string; name: string; factor: string };
+    quantity: string;
+    quantityBase: string;
+    unitPrice: string;
+    discount: string;
+    tax: string;
+    lineTotal: string;
+    allocations: { id: string; supplyLocation: { id: string; name: string; code: string }; qtyBase: string; qtyReleased: string; remaining: string }[];
+  }[];
+  payments: { id: string; number: string; method: string; account: string; amount: string; paidAt: string; status: string }[];
+  releases: { id: string; location: { id: string; name: string }; releasedAt: string; note: string | null }[];
+}
+export interface SaleQuote {
+  priceList: { id: string; name: string };
+  type: 'RETAIL' | 'WHOLESALE';
+  taxRate: string;
+  lines: {
+    productId: string;
+    unitId: string;
+    listPrice: string | null;
+    unitPrice: string | null;
+    lineTotal: string;
+    tax: string;
+    problem: string | null;
+    belowCost: boolean;
+    parts: { locationId: string; locationName: string; qtyBase: string; available: string; enough: boolean }[];
+  }[];
+  subtotal: string;
+  discountTotal: string;
+  taxTotal: string;
+  total: string;
+}
+export interface PendingRelease {
+  allocationId: string;
+  supplyLocation: { id: string; name: string };
+  sale: { id: string; number: string; soldAt: string; location: { id: string; name: string }; customer: { id: string; name: string } | null };
+  product: { id: string; sku: string; name: string; baseUnit: string };
+  qtyBase: string;
+  qtyReleased: string;
+  remaining: string;
+}
+
+// ── Payments (L) ──
+export interface PaymentRecord {
+  id: string;
+  number: string;
+  partyType: 'CUSTOMER' | 'SUPPLIER';
+  customer: { id: string; code: string; name: string } | null;
+  supplier: { id: string; code: string; name: string } | null;
+  account: { id: string; name: string; type: 'CASH' | 'BANK' };
+  method: 'CASH' | 'BANK_TRANSFER' | 'OTHER';
+  amount: string;
+  paidAt: string;
+  reference: string | null;
+  status: 'POSTED' | 'VOIDED';
+  note: string | null;
+  createdById: string;
+  allocations: { id: string; amount: string; document: { kind: 'SALE' | 'RECEIPT'; id: string; number: string } }[];
+}
+export interface OpenDocument {
+  kind: 'SALE' | 'RECEIPT';
+  id: string;
+  number: string;
+  date: string;
+  dueDate: string | null;
+  total: string;
+  paid: string;
+  owed: string;
+  overdue: boolean;
+}
+export interface OpenDocuments {
+  party: { id: string; name: string };
+  balance: string;
+  items: OpenDocument[];
+}
+export interface Statement {
+  party: { kind: 'CUSTOMER' | 'SUPPLIER'; id: string; code: string; name: string };
+  from: string | null;
+  to: string | null;
+  openingBalance: string;
+  closingBalance: string;
+  lines: { date: string; entry: string; description: string; document: { kind: string; id: string; number: string } | null; charge: string; paid: string; balance: string }[];
+}

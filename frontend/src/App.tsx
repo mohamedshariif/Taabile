@@ -27,6 +27,15 @@ import { CountsPage } from './pages/counts/CountsPage';
 import { TransferDetailPage } from './pages/transfers/TransferDetailPage';
 import { TransferNewPage } from './pages/transfers/TransferNewPage';
 import { TransfersPage } from './pages/transfers/TransfersPage';
+import { MoneyAccountsPage } from './pages/money-accounts/MoneyAccountsPage';
+import { ReleasesPage } from './pages/sales/ReleasesPage';
+import { SaleDetailPage } from './pages/sales/SaleDetailPage';
+import { SaleNewPage } from './pages/sales/SaleNewPage';
+import { SalesPage } from './pages/sales/SalesPage';
+import { PaymentDetailPage } from './pages/payments/PaymentDetailPage';
+import { PaymentFormPage } from './pages/payments/PaymentFormPage';
+import { PaymentsPage } from './pages/payments/PaymentsPage';
+import { StatementPage } from './pages/payments/StatementPage';
 
 export default function App() {
   return (
@@ -69,6 +78,31 @@ export default function App() {
             <Route path="transfers/:id" element={<TransferDetailPage />} />
             <Route path="counts" element={<CountsPage />} />
             <Route path="counts/:id" element={<CountDetailPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="sales.view" />}>
+            <Route path="sales" element={<SalesPage />} />
+            <Route path="sales/:id" element={<SaleDetailPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="sales.create" />}>
+            <Route path="sales/new" element={<SaleNewPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="stock.release" />}>
+            <Route path="releases" element={<ReleasesPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="payments.view" />}>
+            <Route path="payments" element={<PaymentsPage />} />
+            <Route path="payments/:id" element={<PaymentDetailPage />} />
+            <Route path="customers/:id/statement" element={<StatementPage kind="customer" />} />
+            <Route path="suppliers/:id/statement" element={<StatementPage kind="supplier" />} />
+          </Route>
+          <Route element={<RequirePermission permission="payments.receive" />}>
+            <Route path="payments/receive" element={<PaymentFormPage kind="customer" />} />
+          </Route>
+          <Route element={<RequirePermission permission="payments.pay_supplier" />}>
+            <Route path="payments/pay" element={<PaymentFormPage kind="supplier" />} />
+          </Route>
+          <Route element={<RequirePermission permission="cash.manage" />}>
+            <Route path="cash" element={<MoneyAccountsPage />} />
           </Route>
           <Route element={<RequirePermission permission="stock.transfer" />}>
             <Route path="transfers/new" element={<TransferNewPage />} />
