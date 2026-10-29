@@ -140,10 +140,10 @@ export function saleRelease(p: { sellingLocationId: string; supplyLocationId: st
 }
 
 /** Receiving money. Allocation to invoices is a sub-ledger step and posts nothing. */
-export function customerPayment(p: { customerId: string; financialAccountId: string; amount: Numeric }): JournalDraft {
+export function customerPayment(p: { customerId?: string | null; financialAccountId: string; amount: Numeric }): JournalDraft {
   return draft('CUSTOMER_PAYMENT', 'Payment from customer', [
     dr(acct(p.financialAccountId), p.amount),
-    cr(key('AR_CUSTOMERS'), p.amount, { customerId: p.customerId }),
+    cr(key('AR_CUSTOMERS'), p.amount, { customerId: p.customerId ?? null }),
   ]);
 }
 
@@ -258,9 +258,9 @@ export function expense(p: {
   amount: Numeric;
   locationId?: string | null;
   paidBy:
-    | { financialAccountId: string }
-    | { supplierId: string } // unpaid bill from a vendor
-    | { employeeId: string }; // employee paid, company reimburses later
+  | { financialAccountId: string }
+  | { supplierId: string } // unpaid bill from a vendor
+  | { employeeId: string }; // employee paid, company reimburses later
 }): JournalDraft {
   const dims = { locationId: p.locationId ?? null };
   const credit =
