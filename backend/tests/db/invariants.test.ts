@@ -231,8 +231,8 @@ describe('payments', () => {
     const cust = await one<{ id: string }>(
       `INSERT INTO customers ("companyId", code, name) VALUES ($1, 'C1', 'Customer') RETURNING id`, [A.companyId]);
     const fa = await one<{ id: string }>(
-      `INSERT INTO financial_accounts ("companyId", name, type, "ledgerAccountId") VALUES ($1, 'Till A', 'CASH', $2) RETURNING id`,
-      [A.companyId, A.cash]);
+      `INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, 'Till A', 'CASH', $2, $3) RETURNING id`,
+      [A.companyId, A.locationId, A.cash]);
     const pay = await one<{ id: string }>(
       `INSERT INTO payments ("companyId", number, "partyType", "customerId", "financialAccountId", method, amount, "paidAt", "createdById")
        VALUES ($1, 'P1', 'CUSTOMER', $2, $3, 'CASH', 100, now(), $4) RETURNING id`, [A.companyId, cust.id, fa.id, uid()]);
@@ -449,5 +449,126 @@ describe('transfer and count rules (Step I)', () => {
     await expect(
       db.query(`INSERT INTO stock_counts ("companyId", number, "locationId", "countedAt", "countedById") VALUES ($1, $2, $3, now(), $4)`, [A.companyId, `C${next()}`, B.locationId, uid()]),
     ).rejects.toThrow(/place of its own company/);
+  });
+});
+
+describe('money account rules (Step K1)', () => {
+  const ins = (co: Co, type: string, location: string | null, ledger: string) =>
+    db.query(`INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, $2, $3, $4, $5)`, [co.companyId, `M${next()}`, type, location, ledger]);
+
+  it('a cash drawer needs a place and a bank account must have none', async () => {
+    await expect(ins(A, 'CASH', null, A.cash)).rejects.toThrow(/financial_accounts_place_rule/);
+    await expect(ins(A, 'BANK', A.locationId, A.cash)).rejects.toThrow(/financial_accounts_place_rule/);
+  });
+
+  it('a money account must use an asset account and a place of its own company, and each ledger account only once', async () => {
+    await expect(ins(A, 'CASH', A.locationId, B.cash)).rejects.toThrow(/asset account of its own company/);
+    await expect(ins(A, 'CASH', A.locationId, A.sales)).rejects.toThrow(/asset account of its own company/);
+    await expect(ins(A, 'CASH', B.locationId, A.cash)).rejects.toThrow(/place of its own company/);
+    const ledger = await one<{ id: string }>(`INSERT INTO accounts ("companyId", code, name, type) VALUES ($1, $2, 'Drawer', 'ASSET') RETURNING id`, [A.companyId, `9${next()}`]);
+    await ins(A, 'CASH', A.locationId, ledger.id);
+    await expect(ins(A, 'CASH', A.locationId, ledger.id)).rejects.toThrow(/financial_accounts_ledger_unique|duplicate/);
+  });
+});
+
+
+describe('sales rules (Step K2)', () => {
+  const unit = (co: Co, productId = co.productId) =>
+    one<{ id: string }>(`INSERT INTO product_units ("companyId", "productId", name, "factorToBase", "isBase") VALUES ($1, $2, $3, 2, false) RETURNING id`, [co.companyId, productId, `u${next()}`]);
+  const sale = (co: Co, location = co.locationId, customer: string | null = null) =>
+    one<{ id: string }>(`INSERT INTO sales ("companyId", number, "locationId", "customerId", subtotal, total, "createdById") VALUES ($1, $2, $3, $4, 10, 10, $5) RETURNING id`, [co.companyId, `S${next()}`, location, customer, uid()]);
+  const saleLine = (co: Co, saleId: string, productId: string, unitId: string, qty = 1, price = 10) =>
+    db.query(`INSERT INTO sale_lines ("companyId", "saleId", "productId", "productUnitId", quantity, "quantityBase", "unitPrice", "lineTotal") VALUES ($1, $2, $3, $4, $5, $5, $6, 10)`, [co.companyId, saleId, productId, unitId, qty, price]);
+
+  it('a sale uses a place and a customer of its own company', async () => {
+    await expect(sale(A, B.locationId)).rejects.toThrow(/place of its own company/);
+    const other = await one<{ id: string }>(`INSERT INTO customers ("companyId", code, name) VALUES ($1, $2, 'Other') RETURNING id`, [B.companyId, `C${next()}`]);
+    await expect(sale(A, A.locationId, other.id)).rejects.toThrow(/customer of its own company/);
+    await sale(A);
+  });
+
+  it('a sale line needs a real quantity and price, a product of its own company, and a unit of its own product', async () => {
+    const s = await sale(A);
+    const u = await unit(A);
+    await expect(saleLine(A, s.id, A.productId, u.id, 0)).rejects.toThrow(/sale_lines_valid/);
+    await expect(saleLine(A, s.id, A.productId, u.id, 1, -1)).rejects.toThrow(/sale_lines_valid/);
+    await expect(saleLine(A, s.id, B.productId, u.id)).rejects.toThrow(/product of its own company/);
+    const foreign = await unit(B, B.productId);
+    await expect(saleLine(A, s.id, A.productId, foreign.id)).rejects.toThrow(/unit of its own product/);
+    await saleLine(A, s.id, A.productId, u.id);
+  });
+
+  it('goods are supplied from a place of the same company', async () => {
+    const s = await sale(A);
+    const u = await unit(A);
+    await saleLine(A, s.id, A.productId, u.id);
+    const l = await one<{ id: string }>(`SELECT id FROM sale_lines WHERE "saleId" = $1`, [s.id]);
+    const alloc = (loc: string) => db.query(`INSERT INTO sale_line_allocations ("companyId", "saleLineId", "supplyLocationId", "qtyBase") VALUES ($1, $2, $3, 1)`, [A.companyId, l.id, loc]);
+    await expect(alloc(B.locationId)).rejects.toThrow(/place of its own company/);
+    await alloc(A.locationId);
+  });
+
+  it('a walk-in payment may have no customer, but a supplier payment still needs a supplier', async () => {
+    const fa = await one<{ id: string }>(`INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, $2, 'CASH', $3, $4) RETURNING id`, [A.companyId, `W${next()}`, A.locationId, (await one<{ id: string }>(`INSERT INTO accounts ("companyId", code, name, type) VALUES ($1, $2, 'Till', 'ASSET') RETURNING id`, [A.companyId, `8${next()}`])).id]);
+    const pay = (type: string, amount: number) =>
+      db.query(`INSERT INTO payments ("companyId", number, "partyType", "financialAccountId", method, amount, "paidAt", "createdById") VALUES ($1, $2, $3, $4, 'CASH', $5, now(), $6)`, [A.companyId, `PW${next()}`, type, fa.id, amount, uid()]);
+    await pay('CUSTOMER', 10);
+    await expect(pay('SUPPLIER', 10)).rejects.toThrow(/payments_valid/);
+    await expect(pay('CUSTOMER', 0)).rejects.toThrow(/payments_valid/);
+  });
+});
+
+
+describe('payment rules (Step L)', () => {
+  const customerOf = (co: Co) => one<{ id: string }>(`INSERT INTO customers ("companyId", code, name) VALUES ($1, $2, 'Cust') RETURNING id`, [co.companyId, `C${next()}`]);
+  const supplierOf = (co: Co) => one<{ id: string }>(`INSERT INTO suppliers ("companyId", code, name) VALUES ($1, $2, 'Sup') RETURNING id`, [co.companyId, `S${next()}`]);
+  const moneyAccount = async (co: Co) => {
+    const led = await one<{ id: string }>(`INSERT INTO accounts ("companyId", code, name, type) VALUES ($1, $2, 'Till', 'ASSET') RETURNING id`, [co.companyId, `7${next()}`]);
+    return one<{ id: string }>(`INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, $2, 'CASH', $3, $4) RETURNING id`, [co.companyId, `T${next()}`, co.locationId, led.id]);
+  };
+  const payment = async (co: Co, party: 'CUSTOMER' | 'SUPPLIER', partyId: string, amount: number) => {
+    const fa = await moneyAccount(co);
+    return one<{ id: string }>(
+      `INSERT INTO payments ("companyId", number, "partyType", "customerId", "supplierId", "financialAccountId", method, amount, "paidAt", "createdById")
+       VALUES ($1, $2, $3, $4, $5, $6, 'CASH', $7, now(), $8) RETURNING id`,
+      [co.companyId, `P${next()}`, party, party === 'CUSTOMER' ? partyId : null, party === 'SUPPLIER' ? partyId : null, fa.id, amount, uid()]);
+  };
+  const saleOf = (co: Co, customer: string | null) =>
+    one<{ id: string }>(`INSERT INTO sales ("companyId", number, "locationId", "customerId", subtotal, total, "createdById") VALUES ($1, $2, $3, $4, 100, 100, $5) RETURNING id`, [co.companyId, `S${next()}`, co.locationId, customer, uid()]);
+  const billOf = (co: Co, supplier: string) =>
+    one<{ id: string }>(`INSERT INTO purchase_receipts ("companyId", number, "supplierId", "locationId", "receivedAt", "goodsTotal", total, "createdById") VALUES ($1, $2, $3, $4, now(), 100, 100, $5) RETURNING id`, [co.companyId, `R${next()}`, supplier, co.locationId, uid()]);
+  const allocate = (co: Co, paymentId: string, target: { saleId?: string; billId?: string }, amount: number) =>
+    db.query(`INSERT INTO payment_allocations ("companyId", "paymentId", "saleId", "purchaseReceiptId", amount, "createdById") VALUES ($1, $2, $3, $4, $5, $6)`, [co.companyId, paymentId, target.saleId ?? null, target.billId ?? null, amount, uid()]);
+
+  it('a payment settles only invoices of its own customer, and bills of its own supplier', async () => {
+    const c1 = await customerOf(A);
+    const c2 = await customerOf(A);
+    const pay = await payment(A, 'CUSTOMER', c1.id, 100);
+    await expect(allocate(A, pay.id, { saleId: (await saleOf(A, c2.id)).id }, 10)).rejects.toThrow(/invoices of its own customer/);
+    await expect(allocate(A, pay.id, { saleId: (await saleOf(A, null)).id }, 10)).rejects.toThrow(/invoices of its own customer/);
+    await expect(allocate(A, pay.id, { billId: (await billOf(A, (await supplierOf(A)).id)).id }, 10)).rejects.toThrow(/bills of its own supplier/);
+    await allocate(A, pay.id, { saleId: (await saleOf(A, c1.id)).id }, 10);
+
+    const s1 = await supplierOf(A);
+    const spay = await payment(A, 'SUPPLIER', s1.id, 100);
+    await expect(allocate(A, spay.id, { billId: (await billOf(A, (await supplierOf(A)).id)).id }, 10)).rejects.toThrow(/bills of its own supplier/);
+    await expect(allocate(A, spay.id, { saleId: (await saleOf(A, c1.id)).id }, 10)).rejects.toThrow(/invoices of its own customer/);
+    await allocate(A, spay.id, { billId: (await billOf(A, s1.id)).id }, 10);
+  });
+
+  it('a payment cannot be matched to more than its amount', async () => {
+    const c1 = await customerOf(A);
+    const pay = await payment(A, 'CUSTOMER', c1.id, 100);
+    await allocate(A, pay.id, { saleId: (await saleOf(A, c1.id)).id }, 60);
+    await expect(allocate(A, pay.id, { saleId: (await saleOf(A, c1.id)).id }, 41)).rejects.toThrow(/more than its amount/);
+    await allocate(A, pay.id, { saleId: (await saleOf(A, c1.id)).id }, 40);
+  });
+
+  it('a bill can never be paid more than it is worth', async () => {
+    const s1 = await supplierOf(A);
+    const bill = await billOf(A, s1.id);
+    await db.query(`UPDATE purchase_receipts SET "paidTotal" = 100 WHERE id = $1`, [bill.id]);
+    await expect(db.query(`UPDATE purchase_receipts SET "paidTotal" = 100.01 WHERE id = $1`, [bill.id])).rejects.toThrow(/purchase_receipts_paid_valid/);
+    await expect(db.query(`UPDATE purchase_receipts SET "paidTotal" = -1 WHERE id = $1`, [bill.id])).rejects.toThrow(/purchase_receipts_paid_valid/);
   });
 });

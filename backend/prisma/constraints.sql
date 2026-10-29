@@ -32,7 +32,7 @@ ALTER TABLE sales ADD CONSTRAINT sales_amounts_valid
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_valid;
 ALTER TABLE payments ADD CONSTRAINT payments_valid CHECK (
   amount > 0 AND (
-    ("partyType" = 'CUSTOMER' AND "customerId" IS NOT NULL AND "supplierId" IS NULL) OR
+    ("partyType" = 'CUSTOMER' AND "supplierId" IS NULL) OR
     ("partyType" = 'SUPPLIER' AND "supplierId" IS NOT NULL AND "customerId" IS NULL)));
 
 ALTER TABLE payment_allocations DROP CONSTRAINT IF EXISTS payment_allocations_valid;
@@ -343,3 +343,104 @@ CREATE TRIGGER transfer_lines_product_guard BEFORE INSERT ON transfer_lines
 DROP TRIGGER IF EXISTS stock_count_lines_product_guard ON stock_count_lines;
 CREATE TRIGGER stock_count_lines_product_guard BEFORE INSERT ON stock_count_lines
   FOR EACH ROW EXECUTE FUNCTION document_line_product_guard();
+
+-- ───────── 10. Money account rules (Step K1) ─────────
+-- A cash drawer belongs to a place; a bank account belongs to the company (no place).
+ALTER TABLE financial_accounts DROP CONSTRAINT IF EXISTS financial_accounts_place_rule;
+ALTER TABLE financial_accounts ADD CONSTRAINT financial_accounts_place_rule CHECK (
+  (type = 'CASH' AND "locationId" IS NOT NULL) OR (type = 'BANK' AND "locationId" IS NULL));
+
+-- Every money account has its own accounting account, and it must be an asset account of the same company.
+CREATE UNIQUE INDEX IF NOT EXISTS financial_accounts_ledger_unique ON financial_accounts ("ledgerAccountId");
+CREATE OR REPLACE FUNCTION financial_account_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM accounts WHERE id = NEW."ledgerAccountId" AND "companyId" = NEW."companyId" AND type = 'ASSET') THEN
+    RAISE EXCEPTION 'A money account must use an asset account of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."locationId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A money account must use a place of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS financial_accounts_guard ON financial_accounts;
+CREATE TRIGGER financial_accounts_guard BEFORE INSERT OR UPDATE OF "ledgerAccountId", "locationId" ON financial_accounts
+  FOR EACH ROW EXECUTE FUNCTION financial_account_guard();
+
+-- ───────── 11. Sales rules (Step K2) ─────────
+ALTER TABLE sale_lines DROP CONSTRAINT IF EXISTS sale_lines_valid;
+ALTER TABLE sale_lines ADD CONSTRAINT sale_lines_valid CHECK (
+  quantity > 0 AND "quantityBase" > 0 AND "unitPrice" >= 0 AND discount >= 0 AND "taxAmount" >= 0 AND "lineTotal" >= 0);
+
+ALTER TABLE sale_release_lines DROP CONSTRAINT IF EXISTS sale_release_lines_valid;
+ALTER TABLE sale_release_lines ADD CONSTRAINT sale_release_lines_valid CHECK ("qtyBase" > 0);
+
+-- A sale uses a place and a customer of its own company.
+CREATE OR REPLACE FUNCTION sale_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A sale must use a place of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."customerId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM customers WHERE id = NEW."customerId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A sale must use a customer of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS sales_guard ON sales;
+CREATE TRIGGER sales_guard BEFORE INSERT ON sales FOR EACH ROW EXECUTE FUNCTION sale_guard();
+
+-- A sale line uses a product of its own company, and a unit that belongs to that product.
+DROP TRIGGER IF EXISTS sale_lines_product_guard ON sale_lines;
+CREATE TRIGGER sale_lines_product_guard BEFORE INSERT ON sale_lines
+  FOR EACH ROW EXECUTE FUNCTION document_line_product_guard();
+CREATE OR REPLACE FUNCTION sale_line_unit_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM product_units WHERE id = NEW."productUnitId" AND "productId" = NEW."productId") THEN
+    RAISE EXCEPTION 'A sale line must use a unit of its own product' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS sale_lines_unit_guard ON sale_lines;
+CREATE TRIGGER sale_lines_unit_guard BEFORE INSERT ON sale_lines FOR EACH ROW EXECUTE FUNCTION sale_line_unit_guard();
+
+-- Goods are supplied from a place of the sale's own company.
+CREATE OR REPLACE FUNCTION sale_allocation_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."supplyLocationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'Goods must be supplied from a place of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS sale_allocations_guard ON sale_line_allocations;
+CREATE TRIGGER sale_allocations_guard BEFORE INSERT ON sale_line_allocations FOR EACH ROW EXECUTE FUNCTION sale_allocation_guard();
+
+
+-- ───────── 12. Payment rules (Step L) ─────────
+-- A bill can never be paid more than it is worth.
+ALTER TABLE purchase_receipts DROP CONSTRAINT IF EXISTS purchase_receipts_paid_valid;
+ALTER TABLE purchase_receipts ADD CONSTRAINT purchase_receipts_paid_valid CHECK ("paidTotal" >= 0 AND "paidTotal" <= total);
+
+-- A payment is matched only to documents of the same company and the same customer or supplier,
+-- and what it is matched to never adds up to more than the payment.
+CREATE OR REPLACE FUNCTION payment_allocation_guard() RETURNS trigger AS $$
+DECLARE pay payments%ROWTYPE; matched numeric;
+BEGIN
+  SELECT * INTO pay FROM payments WHERE id = NEW."paymentId";
+  IF NEW."saleId" IS NOT NULL THEN
+    IF pay."partyType" <> 'CUSTOMER' OR NOT EXISTS (
+      SELECT 1 FROM sales WHERE id = NEW."saleId" AND "companyId" = NEW."companyId" AND "customerId" IS NOT DISTINCT FROM pay."customerId") THEN
+      RAISE EXCEPTION 'A payment can only settle invoices of its own customer' USING ERRCODE = '23514';
+    END IF;
+  ELSE
+    IF pay."partyType" <> 'SUPPLIER' OR NOT EXISTS (
+      SELECT 1 FROM purchase_receipts WHERE id = NEW."purchaseReceiptId" AND "companyId" = NEW."companyId" AND "supplierId" = pay."supplierId") THEN
+      RAISE EXCEPTION 'A payment can only settle bills of its own supplier' USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  SELECT COALESCE(SUM(amount), 0) INTO matched FROM payment_allocations WHERE "paymentId" = NEW."paymentId" AND id <> NEW.id;
+  IF matched + NEW.amount > pay.amount THEN
+    RAISE EXCEPTION 'A payment cannot be matched to more than its amount' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS payment_allocations_guard ON payment_allocations;
+CREATE TRIGGER payment_allocations_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION payment_allocation_guard();
