@@ -78,7 +78,16 @@ export function PartyDetailPage({ kind }: { kind: PartyKind }) {
       </p>
       <Card className="mt-4">
         <div className="text-sm text-muted">Balance</div>
-        <div className="text-xl font-bold">{describeBalance(kind, party.balance, me.company.currency)}</div>
+        {/* <div className="text-xl font-bold">{describeBalance(kind, party.balance, me.company.currency)}</div>
+      </Card> */}
+        <div className="text-xl font-bold">
+          {describeBalance(kind, party.balance, me.company.currency)}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {can('payments.view') && <Button variant="ghost" small onClick={() => navigate(`/${k.path}/${id}/statement`)}>Statement</Button>}
+          {kind === 'customer' && can('payments.receive') && <Button small onClick={() => navigate(`/payments/receive?customerId=${id}`)}>Take payment</Button>}
+          {kind === 'supplier' && can('payments.pay_supplier') && <Button small onClick={() => navigate(`/payments/pay?supplierId=${id}`)}>Pay supplier</Button>}
+        </div>
       </Card>
 
       {canManage ? (
