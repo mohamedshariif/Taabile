@@ -21,6 +21,7 @@ export const PERMISSIONS = [
   'sales.void',
   'sales.void_request',
   'sales.supply_other_location',
+  'sales.discount',
   'stock.view',
   'stock.receive',
   'stock.transfer',
@@ -37,6 +38,10 @@ export const PERMISSIONS = [
   'expenses.create',
   'expenses.approve',
   'cash.manage',
+  'payments.view',
+  'payments.receive',
+  'payments.pay_supplier',
+  'payments.void',
   'payroll.view',
   'payroll.manage',
   'cost.view',
@@ -63,6 +68,7 @@ export const ROLE_PRESETS: Record<Role, Grants> = {
     'sales.create': 'location',
     'sales.void': 'location',
     'sales.supply_other_location': 'company',
+    'sales.discount': 'location', // may change a line's price (a discount) on a sale
     'stock.view': 'company', // sees the whole company's stock, changes only own location
     'stock.receive': 'location',
     'stock.transfer': 'location',
@@ -78,6 +84,9 @@ export const ROLE_PRESETS: Record<Role, Grants> = {
     'expenses.create': 'location',
     'expenses.approve': 'location',
     'cash.manage': 'location',
+    'payments.view': 'location', // sees payments taken at their place, and customer and supplier statements
+    'payments.receive': 'location', // takes money from customers into their own place's drawer or a bank account
+    'payments.pay_supplier': 'location', // pays suppliers from their own place's drawer or a bank account
     'reports.view': 'location',
   },
   STAFF: {
@@ -99,6 +108,7 @@ export const ROLE_PRESETS: Record<Role, Grants> = {
     'payroll.view': 'company',
     'cost.view': 'company',
     'accounting.view': 'company',
+    'payments.view': 'company',
     'reports.view': 'company',
   },
 };

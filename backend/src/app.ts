@@ -17,6 +17,9 @@ import { stockRouter } from './modules/stock/stock.routes.js';
 import { purchasesRouter } from './modules/purchases/purchases.routes.js';
 import { countsRouter } from './modules/counts/counts.routes.js';
 import { transfersRouter } from './modules/transfers/transfers.routes.js';
+import { moneyAccountsRouter } from './modules/money-accounts/money-accounts.routes.js';
+import { salesRouter } from './modules/sales/sales.routes.js';
+import { paymentsRouter } from './modules/payments/payments.routes.js';
 
 export function createApp(opts: { corsOrigin?: string } = {}) {
   const app = express();
@@ -48,6 +51,9 @@ export function createApp(opts: { corsOrigin?: string } = {}) {
   app.use('/api/purchases', purchasesRouter);
   app.use('/api/transfers', transfersRouter);
   app.use('/api/counts', countsRouter);
+  app.use('/api/money-accounts', moneyAccountsRouter);
+  app.use('/api/sales', salesRouter);
+  app.use('/api/payments', paymentsRouter);
   
   app.use('/api/price-lists', priceListsRouter);
   
