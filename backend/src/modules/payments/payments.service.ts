@@ -13,6 +13,7 @@ import { pageArgs, toPage } from '../../shared/pagination.js';
 import { toDateOnly } from '../../shared/schemas.js';
 import { scopeFor, type Permission } from '../auth/permissions.js';
 import type { PaymentListQuery, PaySupplierInput, ReceiveInput, StatementQuery } from './payments.schemas.js';
+import { lockMoneyAccount, moneyAccountBalance } from '../../shared/cashAccounts.js';
 
 // Payments, in plain words:
 //  * Money received from a customer (or paid to a supplier) goes into / out of a cash drawer or bank account.
@@ -119,7 +120,8 @@ export async function paySupplier(auth: AuthContext, input: PaySupplierInput, ip
     const account = await usableAccount(tx, auth, 'payments.pay_supplier', input.financialAccountId);
     const amount = D(input.amount);
     // Never pay out more than the account holds.
-    const bal = await accountBalance(tx, companyId, account.ledgerAccountId);
+    await lockMoneyAccount(tx, account.id);
+    const bal = await moneyAccountBalance(tx, companyId, account.ledgerAccountId);
     if (amount.gt(bal)) throw conflict(`"${account.name}" only holds ${bal.toFixed(2)}, so ${amount.toFixed(2)} cannot be paid from it`);
 
     await tx.$queryRaw`SELECT id FROM suppliers WHERE id = ${supplier.id}::uuid FOR UPDATE`;
@@ -148,10 +150,10 @@ export async function paySupplier(auth: AuthContext, input: PaySupplierInput, ip
   });
 }
 
-async function accountBalance(tx: Tx, companyId: string, ledgerAccountId: string): Promise<Decimal> {
+/* async function accountBalance(tx: Tx, companyId: string, ledgerAccountId: string): Promise<Decimal> {
   const r = await tx.$queryRaw<{ b: string | null }[]>`SELECT SUM(debit - credit)::numeric(19,4)::text AS b FROM journal_lines WHERE "companyId" = ${companyId}::uuid AND "accountId" = ${ledgerAccountId}::uuid`;
   return D(r[0]?.b ?? '0');
-}
+} */
 
 // ───────────────────────── cancelling a payment ─────────────────────────
 

@@ -444,3 +444,40 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS payment_allocations_guard ON payment_allocations;
 CREATE TRIGGER payment_allocations_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION payment_allocation_guard();
+
+-- ───────── 13. Expense and cash movement rules (Step M) ─────────
+ALTER TABLE expenses DROP CONSTRAINT IF EXISTS expenses_valid;
+ALTER TABLE expenses ADD CONSTRAINT expenses_valid CHECK (amount > 0);
+
+-- An expense uses a category, place and money account of its own company.
+CREATE OR REPLACE FUNCTION expense_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM expense_categories WHERE id = NEW."categoryId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'An expense must use a category of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."locationId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'An expense must use a place of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."financialAccountId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW."financialAccountId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'An expense must be paid from an account of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS expenses_guard ON expenses;
+CREATE TRIGGER expenses_guard BEFORE INSERT ON expenses FOR EACH ROW EXECUTE FUNCTION expense_guard();
+
+-- A transfer moves money between two accounts of its own company; it is confirmed exactly when it says who and when.
+ALTER TABLE funds_transfers DROP CONSTRAINT IF EXISTS funds_transfers_state;
+ALTER TABLE funds_transfers ADD CONSTRAINT funds_transfers_state CHECK (
+  ((status = 'CONFIRMED') = ("confirmedAt" IS NOT NULL AND "confirmedById" IS NOT NULL))
+  AND "feeAmount" >= 0 AND ("countedAmount" IS NULL OR "countedAmount" >= 0));
+CREATE OR REPLACE FUNCTION funds_transfer_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW."fromAccountId" AND "companyId" = NEW."companyId")
+     OR NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW."toAccountId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A transfer must use two accounts of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS funds_transfers_guard ON funds_transfers;
+CREATE TRIGGER funds_transfers_guard BEFORE INSERT ON funds_transfers FOR EACH ROW EXECUTE FUNCTION funds_transfer_guard();

@@ -572,3 +572,47 @@ describe('payment rules (Step L)', () => {
     await expect(db.query(`UPDATE purchase_receipts SET "paidTotal" = -1 WHERE id = $1`, [bill.id])).rejects.toThrow(/purchase_receipts_paid_valid/);
   });
 });
+
+describe('expense and cash movement rules (Step M)', () => {
+  const ledgerOf = (co: Co, type = 'ASSET') => one<{ id: string }>(`INSERT INTO accounts ("companyId", code, name, type) VALUES ($1, $2, 'L', $3) RETURNING id`, [co.companyId, `9${next()}`, type]);
+  const moneyOf = async (co: Co, location = co.locationId) =>
+    one<{ id: string }>(`INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, $2, 'CASH', $3, $4) RETURNING id`, [co.companyId, `M${next()}`, location, (await ledgerOf(co)).id]);
+  const categoryOf = async (co: Co) =>
+    one<{ id: string }>(`INSERT INTO expense_categories ("companyId", name, "ledgerAccountId") VALUES ($1, $2, $3) RETURNING id`, [co.companyId, `Cat${next()}`, (await ledgerOf(co, 'EXPENSE')).id]);
+  const expense = (co: Co, o: { category: string; account?: string | null; location?: string | null; amount?: number }) =>
+    db.query(
+      `INSERT INTO expenses ("companyId", number, "locationId", "categoryId", amount, "incurredAt", description, "financialAccountId", "createdById")
+       VALUES ($1, $2, $3, $4, $5, now(), 'Fuel', $6, $7)`,
+      [co.companyId, `E${next()}`, o.location === undefined ? co.locationId : o.location, o.category, o.amount ?? 10, o.account ?? null, uid()]);
+  const transfer = (co: Co, from: string, to: string, extra = '') =>
+    db.query(`INSERT INTO funds_transfers ("companyId", number, type, "fromAccountId", "toAccountId", amount, "occurredAt", "createdById"${extra ? ', status, "confirmedAt", "confirmedById"' : ''})
+              VALUES ($1, $2, 'TRANSFER', $3, $4, 10, now(), $5${extra ? `, ${extra}` : ''})`, [co.companyId, `T${next()}`, from, to, uid()]);
+
+  it('an expense is for a real amount and uses a category, place and account of its own company', async () => {
+    const cat = await categoryOf(A);
+    const acct = await moneyOf(A);
+    await expense(A, { category: cat.id, account: acct.id });
+    await expense(A, { category: cat.id, account: acct.id, location: null }); // a company-wide cost
+    await expect(expense(A, { category: cat.id, amount: 0 })).rejects.toThrow(/expenses_valid/);
+    await expect(expense(A, { category: (await categoryOf(B)).id })).rejects.toThrow(/category of its own company/);
+    await expect(expense(A, { category: cat.id, location: B.locationId })).rejects.toThrow(/place of its own company/);
+    await expect(expense(A, { category: cat.id, account: (await moneyOf(B)).id })).rejects.toThrow(/account of its own company/);
+  });
+
+  it('a transfer is between two accounts of its own company', async () => {
+    const a1 = await moneyOf(A);
+    const a2 = await moneyOf(A);
+    await transfer(A, a1.id, a2.id);
+    await expect(transfer(A, a1.id, (await moneyOf(B)).id)).rejects.toThrow(/two accounts of its own company/);
+    await expect(transfer(A, a1.id, a1.id)).rejects.toThrow(/funds_transfers_valid/);
+  });
+
+  it('a transfer is confirmed exactly when it says who confirmed it and when', async () => {
+    const a1 = await moneyOf(A);
+    const a2 = await moneyOf(A);
+    await expect(transfer(A, a1.id, a2.id, `'CONFIRMED', NULL, NULL`)).rejects.toThrow(/funds_transfers_state/);
+    await expect(transfer(A, a1.id, a2.id, `'PENDING', now(), '${uid()}'`)).rejects.toThrow(/funds_transfers_state/);
+    await transfer(A, a1.id, a2.id, `'CONFIRMED', now(), '${uid()}'`);
+    await transfer(A, a1.id, a2.id, `'PENDING', NULL, NULL`);
+  });
+});
