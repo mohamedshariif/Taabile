@@ -22,3 +22,9 @@ coverage/
 # Logs and operating-system files
 *.log
 .DS_Store
+
+# Temporary files from local dependency repairs
+/backend/.prisma-6.19.3.tgz.icloud
+/frontend/.lightningcss-darwin-x64-1.30.2.tgz.icloud
+/frontend/package/
+/frontend/tailwindcss-oxide-darwin-x64-4.3.3.tgz
