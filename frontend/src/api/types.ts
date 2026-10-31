@@ -444,3 +444,58 @@ export interface CashCount {
   result: 'MATCH' | 'SHORTAGE' | 'OVERAGE';
   journalEntry: string | null;
 }
+
+// ── Reports (N) ──
+export interface ReportOverview {
+  asOf: string;
+  salesToday: { count: number; total: string };
+  salesThisMonth: { count: number; total: string };
+  owedToUs: string | null;
+  weOwe: string | null;
+  stockValue: string | null;
+  cashAndBank: string | null;
+}
+export interface SalesReport {
+  range: { from: string; to: string };
+  totals: { count: number; total: string; discount: string; paid: string; unpaid: string; average: string };
+  days: { date: string; count: number; total: string; discount: string; paid: string; unpaid: string }[];
+  byLocation: { locationId: string; name: string; count: number; total: string }[];
+  topProducts: { productId: string; name: string; sku: string; unit: string; quantity: string; value: string }[];
+}
+export interface ProfitLine { code: string; name: string; amount: string }
+export interface ProfitLossReport {
+  range: { from: string; to: string };
+  locationId: string | null;
+  revenue: ProfitLine[];
+  revenueTotal: string;
+  costOfGoods: ProfitLine[];
+  costOfGoodsTotal: string;
+  grossProfit: string;
+  grossMarginPercent: string | null;
+  expenses: ProfitLine[];
+  expensesTotal: string;
+  netProfit: string;
+  note: string | null;
+}
+export interface StockValueReport {
+  locationId: string | null;
+  total: string;
+  ledgerTotal: string;
+  difference: string;
+  byLocation: { locationId: string; name: string; items: number; value: string }[];
+  products: { productId: string; name: string; sku: string; unit: string; quantity: string; averageCost: string; value: string }[];
+  truncated: boolean;
+}
+export interface OwedParty {
+  id: string; code: string; name: string; phone: string | null; openDocuments: number; owed: string;
+  notDue: string; days1to30: string; days31to60: string; days61to90: string; over90: string; oldestDaysOverdue: number;
+}
+export interface OwedReport {
+  asOf: string;
+  locationId: string | null;
+  total: string;
+  buckets: { notDue: string; days1to30: string; days31to60: string; days61to90: string; over90: string };
+  ledgerTotal: string | null;
+  difference: string | null;
+  parties: OwedParty[];
+}
