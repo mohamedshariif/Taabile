@@ -36,6 +36,13 @@ import { PaymentDetailPage } from './pages/payments/PaymentDetailPage';
 import { PaymentFormPage } from './pages/payments/PaymentFormPage';
 import { PaymentsPage } from './pages/payments/PaymentsPage';
 import { StatementPage } from './pages/payments/StatementPage';
+import { CashCountPage } from './pages/cash/CashCountPage';
+import { CashMoveDetailPage } from './pages/cash/CashMoveDetailPage';
+import { CashMoveNewPage } from './pages/cash/CashMoveNewPage';
+import { CashMovesPage } from './pages/cash/CashMovesPage';
+import { ExpenseDetailPage } from './pages/expenses/ExpenseDetailPage';
+import { ExpenseNewPage } from './pages/expenses/ExpenseNewPage';
+import { ExpensesPage } from './pages/expenses/ExpensesPage';
 
 export default function App() {
   return (
@@ -101,8 +108,17 @@ export default function App() {
           <Route element={<RequirePermission permission="payments.pay_supplier" />}>
             <Route path="payments/pay" element={<PaymentFormPage kind="supplier" />} />
           </Route>
+          <Route element={<RequirePermission permission="expenses.create" />}>
+            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="expenses/new" element={<ExpenseNewPage />} />
+            <Route path="expenses/:id" element={<ExpenseDetailPage />} />
+          </Route>
           <Route element={<RequirePermission permission="cash.manage" />}>
             <Route path="cash" element={<MoneyAccountsPage />} />
+            <Route path="cash/moves" element={<CashMovesPage />} />
+            <Route path="cash/moves/new" element={<CashMoveNewPage />} />
+            <Route path="cash/moves/:id" element={<CashMoveDetailPage />} />
+            <Route path="cash/count" element={<CashCountPage />} />
           </Route>
           <Route element={<RequirePermission permission="stock.transfer" />}>
             <Route path="transfers/new" element={<TransferNewPage />} />

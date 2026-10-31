@@ -398,3 +398,49 @@ export interface Statement {
   closingBalance: string;
   lines: { date: string; entry: string; description: string; document: { kind: string; id: string; number: string } | null; charge: string; paid: string; balance: string }[];
 }
+
+// ── Expenses and cash movements (M) ──
+export interface Expense {
+  id: string;
+  number: string;
+  category: { id: string; name: string };
+  location: { id: string; name: string } | null;
+  account: { id: string; name: string; type: 'CASH' | 'BANK' } | null;
+  amount: string;
+  incurredOn: string;
+  description: string;
+  status: 'POSTED' | 'VOIDED';
+  createdById: string;
+  approvedById: string | null;
+}
+export interface ExpensePage {
+  items: Expense[];
+  nextCursor: string | null;
+  /** Total of the valid expenses matching the filter. */
+  total: string;
+}
+export interface CashTransfer {
+  id: string;
+  number: string;
+  type: 'DEPOSIT' | 'HANDOVER' | 'WITHDRAWAL' | 'TRANSFER';
+  from: { id: string; name: string; type: 'CASH' | 'BANK' };
+  to: { id: string; name: string; type: 'CASH' | 'BANK' };
+  amount: string;
+  received: string | null;
+  difference: string;
+  differenceNote: string | null;
+  status: 'PENDING' | 'CONFIRMED';
+  occurredAt: string;
+  confirmedAt: string | null;
+  createdById: string;
+  confirmedById: string | null;
+}
+export interface CashChoice { id: string; name: string; type: 'CASH' | 'BANK'; place: string | null }
+export interface CashCount {
+  account: { id: string; name: string };
+  expected: string;
+  counted: string;
+  difference: string;
+  result: 'MATCH' | 'SHORTAGE' | 'OVERAGE';
+  journalEntry: string | null;
+}
