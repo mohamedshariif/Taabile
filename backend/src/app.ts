@@ -22,6 +22,7 @@ import { salesRouter } from './modules/sales/sales.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { cashRouter } from './modules/cash/cash.routes.js';
 import { expensesRouter } from './modules/expenses/expenses.routes.js';
+import { reportsRouter } from './modules/reports/reports.routes.js';
 
 export function createApp(opts: { corsOrigin?: string } = {}) {
   const app = express();
@@ -56,6 +57,7 @@ export function createApp(opts: { corsOrigin?: string } = {}) {
   app.use('/api/money-accounts', moneyAccountsRouter);
   app.use('/api/sales', salesRouter);
   app.use('/api/payments', paymentsRouter);
+  app.use('/api/reports', reportsRouter);
   app.use('/api/expenses', expensesRouter);
   app.use('/api/cash', cashRouter);
   
