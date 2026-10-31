@@ -43,6 +43,11 @@ import { CashMovesPage } from './pages/cash/CashMovesPage';
 import { ExpenseDetailPage } from './pages/expenses/ExpenseDetailPage';
 import { ExpenseNewPage } from './pages/expenses/ExpenseNewPage';
 import { ExpensesPage } from './pages/expenses/ExpensesPage';
+import { OwedReportPage } from './pages/reports/OwedReportPage';
+import { ProfitLossPage } from './pages/reports/ProfitLossPage';
+import { ReportsHomePage } from './pages/reports/ReportsHomePage';
+import { SalesReportPage } from './pages/reports/SalesReportPage';
+import { StockValuePage } from './pages/reports/StockValuePage';
 
 export default function App() {
   return (
@@ -107,6 +112,20 @@ export default function App() {
           </Route>
           <Route element={<RequirePermission permission="payments.pay_supplier" />}>
             <Route path="payments/pay" element={<PaymentFormPage kind="supplier" />} />
+          </Route>
+          <Route element={<RequirePermission permission="reports.view" />}>
+            <Route path="reports" element={<ReportsHomePage />} />
+            <Route path="reports/sales" element={<SalesReportPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="accounting.view" />}>
+            <Route path="reports/profit-loss" element={<ProfitLossPage />} />
+          </Route>
+          <Route element={<RequirePermission permission="cost.view" />}>
+            <Route path="reports/stock-value" element={<StockValuePage />} />
+          </Route>
+          <Route element={<RequirePermission permission="payments.view" />}>
+            <Route path="reports/receivables" element={<OwedReportPage kind="customer" />} />
+            <Route path="reports/payables" element={<OwedReportPage kind="supplier" />} />
           </Route>
           <Route element={<RequirePermission permission="expenses.create" />}>
             <Route path="expenses" element={<ExpensesPage />} />
