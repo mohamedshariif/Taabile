@@ -867,7 +867,7 @@ model FinancialAccount {
   type                  FinancialAccountType
   locationId            String?               @db.Uuid
   location              Location?             @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  ledgerAccountId       String                @db.Uuid
+  ledgerAccountId       String                @unique(map: "financial_accounts_ledger_unique") @db.Uuid
   ledgerAccount         Account               @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
   status                RecordStatus          @default(ACTIVE)
   payments              Payment[]
@@ -1037,16 +1037,20 @@ model EmployeeLedgerEntry {
   company            Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   employeeId         String             @db.Uuid
   employee           Employee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  number             String
   type               EmployeeLedgerType
   amount             Decimal            @db.Decimal(19, 4)
   period             String?
   financialAccountId String?            @db.Uuid
   financialAccount   FinancialAccount?  @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
   occurredAt         DateTime           @db.Timestamptz(3)
+  status             DocStatus          @default(POSTED)
   note               String?
+  voidReason         String?
   createdById        String             @db.Uuid
   createdAt          DateTime           @default(now()) @db.Timestamptz(3)
 
+  @@unique([companyId, number])
   @@index([companyId, employeeId, occurredAt])
   @@map("employee_ledger_entries")
 }

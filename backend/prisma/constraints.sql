@@ -481,3 +481,62 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS funds_transfers_guard ON funds_transfers;
 CREATE TRIGGER funds_transfers_guard BEFORE INSERT ON funds_transfers FOR EACH ROW EXECUTE FUNCTION funds_transfer_guard();
+
+
+-- ───────── 14. Employee and payroll rules (Step O) ─────────
+-- An entry has the right shape for its kind: a real amount (an adjustment may be minus, never zero), a month only on
+-- a posted salary, and a cash or bank account exactly when money was paid out.
+ALTER TABLE employee_ledger_entries DROP CONSTRAINT IF EXISTS employee_ledger_entries_valid;
+ALTER TABLE employee_ledger_entries ADD CONSTRAINT employee_ledger_entries_valid CHECK (
+  (CASE WHEN type = 'ADJUSTMENT' THEN amount <> 0 ELSE amount > 0 END)
+  AND ((type = 'SALARY_EARNED') = (period IS NOT NULL))
+  AND (period IS NULL OR period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+  AND ((type IN ('SALARY_PAID', 'ADVANCE', 'WITHDRAWAL')) = ("financialAccountId" IS NOT NULL))
+);
+
+-- A month's salary is posted once per employee (a cancelled one does not count, so it can be posted again).
+CREATE UNIQUE INDEX IF NOT EXISTS employee_salary_once_per_month
+  ON employee_ledger_entries ("companyId", "employeeId", period) WHERE type = 'SALARY_EARNED' AND status = 'POSTED';
+
+-- The employee and the money account belong to the same company as the entry.
+CREATE OR REPLACE FUNCTION employee_ledger_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM employees WHERE id = NEW."employeeId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A payroll entry must be for an employee of its own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."financialAccountId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW."financialAccountId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A payroll entry must use an account of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS employee_ledger_entries_guard ON employee_ledger_entries;
+CREATE TRIGGER employee_ledger_entries_guard BEFORE INSERT ON employee_ledger_entries FOR EACH ROW EXECUTE FUNCTION employee_ledger_guard();
+
+-- Pay agreements: a real amount, an end that is not before the start, one starting day per person, and only one open at a time.
+ALTER TABLE salary_agreements DROP CONSTRAINT IF EXISTS salary_agreements_valid;
+ALTER TABLE salary_agreements ADD CONSTRAINT salary_agreements_valid CHECK ("monthlyAmount" > 0 AND ("endedOn" IS NULL OR "endedOn" >= "effectiveFrom"));
+CREATE UNIQUE INDEX IF NOT EXISTS salary_agreements_one_start ON salary_agreements ("employeeId", "effectiveFrom");
+CREATE UNIQUE INDEX IF NOT EXISTS salary_agreements_one_open ON salary_agreements ("employeeId") WHERE "endedOn" IS NULL;
+CREATE OR REPLACE FUNCTION salary_agreement_guard() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM employees WHERE id = NEW."employeeId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'A pay agreement must be for an employee of its own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS salary_agreements_guard ON salary_agreements;
+CREATE TRIGGER salary_agreements_guard BEFORE INSERT ON salary_agreements FOR EACH ROW EXECUTE FUNCTION salary_agreement_guard();
+
+-- An employee works at a place of their own company, and a linked login belongs to that company.
+CREATE OR REPLACE FUNCTION employee_guard() RETURNS trigger AS $$
+BEGIN
+  IF NEW."locationId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW."locationId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'An employee must work at a place of their own company' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."userId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM memberships WHERE "userId" = NEW."userId" AND "companyId" = NEW."companyId") THEN
+    RAISE EXCEPTION 'An employee can only be linked to a login of their own company' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS employees_guard ON employees;
+CREATE TRIGGER employees_guard BEFORE INSERT OR UPDATE OF "locationId", "userId" ON employees FOR EACH ROW EXECUTE FUNCTION employee_guard();

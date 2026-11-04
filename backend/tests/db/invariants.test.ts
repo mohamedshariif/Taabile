@@ -616,3 +616,79 @@ describe('expense and cash movement rules (Step M)', () => {
     await transfer(A, a1.id, a2.id, `'PENDING', NULL, NULL`);
   });
 });
+
+describe('employee and payroll rules (Step O)', () => {
+  const ledgerOf = (co: Co, type = 'ASSET') => one<{ id: string }>(`INSERT INTO accounts ("companyId", code, name, type) VALUES ($1, $2, 'L', $3) RETURNING id`, [co.companyId, `8${next()}`, type]);
+  const moneyOf = async (co: Co) =>
+    one<{ id: string }>(`INSERT INTO financial_accounts ("companyId", name, type, "locationId", "ledgerAccountId") VALUES ($1, $2, 'CASH', $3, $4) RETURNING id`, [co.companyId, `P${next()}`, co.locationId, (await ledgerOf(co)).id]);
+  const employee = (co: Co, location: string | null = null) => one<{ id: string }>(`INSERT INTO employees ("companyId", name, "locationId") VALUES ($1, $2, $3) RETURNING id`, [co.companyId, `Emp${next()}`, location]);
+  const entry = (co: Co, emp: string, type: string, amount: number, o: { period?: string | null; account?: string | null; status?: string } = {}) =>
+    db.query(
+      `INSERT INTO employee_ledger_entries ("companyId", "employeeId", number, type, amount, period, "financialAccountId", "occurredAt", "createdById", status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9)`,
+      [co.companyId, emp, `PY${next()}`, type, amount, o.period ?? null, o.account ?? null, uid(), o.status ?? 'POSTED']);
+  const pay = (co: Co, emp: string, amount: number, from: string, ended: string | null = null) =>
+    db.query(`INSERT INTO salary_agreements ("companyId", "employeeId", "monthlyAmount", "effectiveFrom", "endedOn") VALUES ($1, $2, $3, $4, $5)`, [co.companyId, emp, amount, from, ended]);
+
+  it('an entry has the right shape for its kind', async () => {
+    const e = await employee(A);
+    const acct = await moneyOf(A);
+    await entry(A, e.id, 'SALARY_EARNED', 300, { period: '2026-10' });
+    await entry(A, e.id, 'SALARY_PAID', 100, { account: acct.id });
+    await entry(A, e.id, 'ADVANCE', 50, { account: acct.id });
+    await entry(A, e.id, 'ADJUSTMENT', -5);
+    await expect(entry(A, e.id, 'SALARY_EARNED', 0, { period: '2026-09' })).rejects.toThrow(/employee_ledger_entries_valid/);
+    await expect(entry(A, e.id, 'ADJUSTMENT', 0)).rejects.toThrow(/employee_ledger_entries_valid/);
+    await expect(entry(A, e.id, 'SALARY_EARNED', 300)).rejects.toThrow(/employee_ledger_entries_valid/); // a salary needs its month
+    await expect(entry(A, e.id, 'SALARY_EARNED', 300, { period: '2026-13' })).rejects.toThrow(/employee_ledger_entries_valid/);
+    await expect(entry(A, e.id, 'SALARY_PAID', 100)).rejects.toThrow(/employee_ledger_entries_valid/); // money out needs an account
+    await expect(entry(A, e.id, 'SALARY_PAID', 100, { account: acct.id, period: '2026-10' })).rejects.toThrow(/employee_ledger_entries_valid/);
+    await expect(entry(A, e.id, 'ADJUSTMENT', 5, { account: acct.id })).rejects.toThrow(/employee_ledger_entries_valid/);
+  });
+
+  it('a month of salary is posted once per employee, unless the first was cancelled', async () => {
+    const e = await employee(A);
+    await entry(A, e.id, 'SALARY_EARNED', 300, { period: '2026-08' });
+    await expect(entry(A, e.id, 'SALARY_EARNED', 300, { period: '2026-08' })).rejects.toThrow(/employee_salary_once_per_month/);
+    await entry(A, e.id, 'SALARY_EARNED', 300, { period: '2026-09' }); // another month is fine
+    await entry(A, (await employee(A)).id, 'SALARY_EARNED', 300, { period: '2026-08' }); // another person is fine
+    await db.query(`UPDATE employee_ledger_entries SET status = 'VOIDED' WHERE "employeeId" = $1 AND period = '2026-08'`, [e.id]);
+    await entry(A, e.id, 'SALARY_EARNED', 310, { period: '2026-08' });
+  });
+
+  it('an entry uses an employee and an account of its own company', async () => {
+    const e = await employee(A);
+    await expect(entry(A, (await employee(B)).id, 'ADJUSTMENT', 5)).rejects.toThrow(/employee of its own company/);
+    await expect(entry(A, e.id, 'ADVANCE', 5, { account: (await moneyOf(B)).id })).rejects.toThrow(/account of its own company/);
+  });
+
+  it('pay agreements: a real amount, sensible dates, one start day, one open at a time', async () => {
+    const e = await employee(A);
+    await pay(A, e.id, 300, '2026-01-01', '2026-05-31');
+    await pay(A, e.id, 400, '2026-06-01');
+    await expect(pay(A, e.id, 0, '2025-01-01', '2025-02-01')).rejects.toThrow(/salary_agreements_valid/);
+    await expect(pay(A, e.id, 100, '2025-03-01', '2025-02-01')).rejects.toThrow(/salary_agreements_valid/);
+    await expect(pay(A, e.id, 500, '2026-06-01', '2026-06-30')).rejects.toThrow(/salary_agreements_one_start/);
+    await expect(pay(A, e.id, 500, '2026-09-01')).rejects.toThrow(/salary_agreements_one_open/);
+    await expect(pay(A, (await employee(B)).id, 100, '2026-01-01')).rejects.toThrow(/employee of its own company/);
+  });
+
+  it('an employee works at a place of their own company', async () => {
+    await employee(A, A.locationId);
+    await employee(A, null);
+    await expect(employee(A, B.locationId)).rejects.toThrow(/place of their own company/);
+  });
+
+    it('an employee is linked only to a login of their own company, and a login is linked once', async () => {
+    const user = await one<{ id: string }>(`INSERT INTO users (email, name, "updatedAt") VALUES ($1, 'Linked Person', now()) RETURNING id`, [`link${next()}-${uid()}@example.com`]);
+    await db.query(`INSERT INTO memberships ("companyId", "userId", role) VALUES ($1, $2, 'MANAGER')`, [A.companyId, user.id]);
+    const e1 = await employee(A);
+    await db.query(`UPDATE employees SET "userId" = $1 WHERE id = $2`, [user.id, e1.id]); // a login of the same company: fine
+    const e2 = await employee(A);
+    await expect(db.query(`UPDATE employees SET "userId" = $1 WHERE id = $2`, [user.id, e2.id])).rejects.toThrow(/duplicate key|unique/i); // once
+    const e3 = await employee(B);
+    await expect(db.query(`UPDATE employees SET "userId" = $1 WHERE id = $2`, [user.id, e3.id])).rejects.toThrow(/login of their own company/); // not B's login
+    await expect(db.query(`INSERT INTO employees ("companyId", name, "userId") VALUES ($1, 'Direct', $2)`, [B.companyId, user.id])).rejects.toThrow(/login of their own company/);
+    await db.query(`UPDATE employees SET "userId" = NULL WHERE id = $1`, [e1.id]); // unlinking is always fine
+  });
+});
